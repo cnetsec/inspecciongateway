@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       dominio:
-        description: "Dominio o IP objetivo (sin http/https)"
+        description: 'Dominio o IP para analizar'
         required: true
-        default: "juice-shop.herokuapp.com"
+        default: 'juice-shop.herokuapp.com'
 
 jobs:
   analisis-superficie:
@@ -14,61 +14,71 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 Clonar repositorio
-        uses: actions/checkout@v4
-
-      - name: 📦 Instalar herramientas necesarias
-        run: |
-          sudo apt update
-          sudo apt install -y jq curl unzip
-          go install github.com/projectdiscovery/httpx/cmd/httpx@latest
-          echo "$HOME/go/bin" >> $GITHUB_PATH
-
-      - name: 📄 Crear archivo de objetivos
+      - name: 📝 Preparar objetivo
         run: echo "${{ github.event.inputs.dominio }}" > objetivos.txt
 
-      - name: 🌐 Ejecutar httpx (detección pasiva)
+      - name: 🌐 Ejecutar httpx y capturar datos
         run: |
-          httpx -l objetivos.txt -title -tech-detect -tls-grab -json -no-color -silent > salida_httpx.json
+          httpx -l objetivos.txt -title -tech-detect -tls-grab -json -no-color -silent > salida_httpx.json || echo "[]" > salida_httpx.json
           cat salida_httpx.json > logs_gatewayinspector.txt
 
-      - name: 🧠 Extraer tecnología y versión
-        id: extraer
+      - name: 🧠 Extraer mejor tecnología para CVE (con fallbacks)
+        id: tecnologia
         run: |
-          tecnologia=$(jq -r '.webserver // .cdn_name // .tls.issuer_cn // .tls.subject_cn // empty' salida_httpx.json | head -n 1)
-          if [[ -z "$tecnologia" || "$tecnologia" == "null" ]]; then
-            echo "❌ No se pudo detectar ninguna tecnología."
-            tecnologia="Desconocida"
-          fi
-          version_limpia=$(echo "$tecnologia" | grep -oP '[A-Za-z0-9\.\-]+' | head -n 1)
-          echo "💡 Tecnología detectada: $tecnologia"
-          echo "version=$version_limpia" >> $GITHUB_OUTPUT
-          echo "Tecnología usada para búsqueda de CVE: $tecnologia" >> logs_gatewayinspector.txt
+          tecnologia=$(jq -r '.[0] |
+            .webserver // 
+            .cdn_name // 
+            .tls.issuer_cn // 
+            .tls.subject_cn // 
+            .tls.subject_dn // 
+            .tls.subject_org[0] // 
+            .title // 
+            .content_type // 
+            .url // 
+            empty' salida_httpx.json)
 
-      - name: 🛡️ Consultar CVEs en CIRCL
+          if [ -z "$tecnologia" ]; then
+            tecnologia="unknown"
+          fi
+
+          echo "tecnologia_detectada=$tecnologia" >> $GITHUB_ENV
+          echo "💡 Tecnología detectada (fallback aplicado si necesario): $tecnologia"
+
+      - name: 🔍 Buscar CVEs usando CIRCL
         run: |
-          version="${{ steps.extraer.outputs.version }}"
+          version="${{ env.tecnologia_detectada }}"
           echo "🔍 Consultando CVEs en: https://cve.circl.lu/api/search/$version"
-          curl -s "https://cve.circl.lu/api/search/$version" > cves.json || echo "[]"
-          if jq -e '.[]' cves.json > /dev/null 2>&1; then
-            echo "✅ CVEs encontrados para $version:"
-            jq '.[] | {id, summary}' cves.json | tee -a logs_gatewayinspector.txt
+          if [ "$version" != "unknown" ]; then
+            curl -s "https://cve.circl.lu/api/search/$version" | jq . > cves_detectados.json || echo "{}" > cves_detectados.json
           else
-            echo "Sin CVEs encontrados." | tee -a logs_gatewayinspector.txt
+            echo "{}" > cves_detectados.json
           fi
 
-      - name: 📋 Checklist Final de Tecnologías Detectadas
+      - name: 📋 Checklist de tecnologías detectadas
         run: |
           echo "### Checklist de Tecnologías Detectadas" >> logs_gatewayinspector.txt
-          for tech in waf ingress gateway tls nginx kubernetes apache modsecurity cloudflare haproxy envoy; do
-            if grep -i "$tech" salida_httpx.json; then
-              echo "- $tech: ✅" | tee -a logs_gatewayinspector.txt
+          for tech in waf ingress gateway tls nginx kubernetes apache modsecurity cloudflare haproxy envoy fortinet checkpoint aws f5 paloalto; do
+            resultado=$(grep -i "$tech" salida_httpx.json || true)
+            if [ -n "$resultado" ]; then
+              echo "- $tech: ✅" >> logs_gatewayinspector.txt
             else
-              echo "- $tech: ❌" | tee -a logs_gatewayinspector.txt
+              echo "- $tech: ❌" >> logs_gatewayinspector.txt
             fi
           done
 
-      - name: 📝 Resultado del Análisis
+      - name: 📦 Mostrar resultado del análisis
         run: |
           echo "📝 Resultado del Análisis:"
+          echo ""
+          cat salida_httpx.json
+          echo ""
+          echo "Tecnología usada para búsqueda de CVE: ${{ env.tecnologia_detectada }}"
+          echo ""
+          cat cves_detectados.json
+          echo ""
+          echo "📋 Checklist final de tecnologías:"
           cat logs_gatewayinspector.txt
+
+      # - name: 🧪 Escaneo opcional con Nuclei (futuro)
+      #   run: |
+      #     nuclei -l objetivos.txt -t cves/ -json -o nuclei_output.json
