@@ -1,0 +1,94 @@
+name: InspectorDeGateway
+
+on:
+  workflow_dispatch:
+    inputs:
+      objetivo:
+        description: 'Dominio o IP a analizar (ej: juice-shop.herokuapp.com)'
+        required: true
+        type: string
+      gemini:
+        description: '¿Generar informe con Gemini?'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  escaneo:
+    name: Análisis Pasivo de Superficie de Borde
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🔄 Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Instalar herramientas necesarias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl wget jq golang
+          go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+
+      - name: 🌐 Fingerprint con httpx
+        run: |
+          echo "${{ inputs.objetivo }}" > objetivos.txt
+          httpx -l objetivos.txt -title -tech-detect -tls-grab -json -no-color -silent > salida_httpx.json
+          cat salida_httpx.json > logs_gatewayinspector.txt
+
+      - name: 🧠 Extraer tecnología y versión
+        id: extraer
+        run: |
+          servidor=$(jq -r '.[0].server' salida_httpx.json)
+          version_limpia=$(echo "$servidor" | grep -oP '[A-Za-z0-9\.-]+')
+          echo "💡 Tecnología detectada: $servidor"
+          echo "versión=$version_limpia" >> $GITHUB_OUTPUT
+          echo "$servidor" >> logs_gatewayinspector.txt
+
+      - name: 🛡️ Consultar posibles CVEs en CIRCL
+        run: |
+          cve_url="https://cve.circl.lu/api/search/${{ steps.extraer.outputs.version }}"
+          echo "🔍 Consultando CVEs en: $cve_url"
+          curl -s "$cve_url" | jq '.data[] | {id, summary}' >> logs_gatewayinspector.txt || echo "Sin CVEs encontrados." >> logs_gatewayinspector.txt
+
+      - name: ✅ Checklist de tecnologías detectadas
+        run: |
+          echo "### Checklist de Tecnologías Detectadas" >> logs_gatewayinspector.txt
+          for item in waf ingress gateway tls nginx kubernetes apache modsecurity cloudflare haproxy envoy; do
+            if grep -i "$item" salida_httpx.json; then
+              echo "- $item: ✅" >> logs_gatewayinspector.txt
+            else
+              echo "- $item: ❌" >> logs_gatewayinspector.txt
+            fi
+          done
+
+      - name: 🤖 Generar Informe con Gemini (Opcional)
+        if: inputs.gemini == 'true'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          echo "🧠 Enviando logs para análisis con Gemini..."
+          LOGS=$(sed 's/\x1b\[[0-9;]*m//g' logs_gatewayinspector.txt)
+          PROMPT="Eres un analista de ciberseguridad. A partir de los siguientes logs, genera un informe en formato Markdown con las siguientes secciones:
+          1. **Resumen Ejecutivo**
+          2. **Tecnologías Detectadas (con checklist ✅/❌ para WAF, Ingress, TLS, etc.)**
+          3. **CVEs Potenciales encontradas vía CIRCL**
+          4. **Detalles Técnicos (TLS, headers, servidores, superficie de exposición)**
+          5. **Recomendaciones de Seguridad**
+          Logs:
+          $LOGS"
+          PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
+          RESPUESTA=$(curl -s -X POST -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=$GEMINI_API_KEY")
+
+          if echo "$RESPUESTA" | jq -e 'has("error")'; then
+            echo "❌ Error al generar el informe con Gemini:"
+            echo "$RESPUESTA" | jq .
+            exit 1
+          fi
+
+          echo "--- 📄 INFORME DE SEGURIDAD ---"
+          echo "$RESPUESTA" | jq -r '.candidates[0].content.parts[0].text'
