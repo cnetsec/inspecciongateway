@@ -19,94 +19,89 @@ jobs:
       - name: ⚙️ Instalar dependencias necesarias
         run: |
           # Atualiza a lista de pacotes e instala as dependências básicas do sistema
-          sudo apt-get update -y # Adicionado -y para confirmar automaticamente
-          sudo apt-get install -y jq unzip curl whatweb
+          sudo apt-get update -y
+          sudo apt-get install -y jq unzip curl whatweb # whatweb permanece, pois é independente
 
           # Instalação robusta do httpx
           # Baixa a URL do binário mais recente para Linux AMD64 usando a API do GitHub
           curl -s https://api.github.com/repos/projectdiscovery/httpx/releases/latest \
             | jq -r '.assets[] | select(.name | test("httpx_.*_linux_amd64.zip")) | .browser_download_url' \
-            | xargs curl -L -o httpx.zip # Baixa o arquivo ZIP
-          unzip httpx.zip # Descompacta
-          chmod +x httpx # Adiciona permissão de execução
-          sudo mv httpx /usr/local/bin/httpx # Move para um diretório no PATH
+            | xargs curl -L -o httpx.zip
+          unzip httpx.zip
+          chmod +x httpx
+          sudo mv httpx /usr/local/bin/httpx
           rm httpx.zip # Limpa o arquivo ZIP baixado
 
-          # Instalação robusta do Wappalyzer-Go
-          # CORREÇÃO CRÍTICA: Ajustado o padrão regex no jq para 'wappalyzer_.*_linux_amd64.zip'
-          # O binário Wappalyzer-Go é frequentemente nomeado 'wappalyzer' em seus releases
-          curl -s https://api.github.com/repos/projectdiscovery/wappalyzergo/releases/latest \
-            | jq -r '.assets[] | select(.name | test("wappalyzer_.*_linux_amd64.zip")) | .browser_download_url' \
-            | xargs curl -L -o wappalyzergo.zip # Baixa o arquivo ZIP
-          unzip wappalyzergo.zip # Descompacta
-          chmod +x wappalyzer # Adiciona permissão de execução ao binário extraído (geralmente 'wappalyzer')
-          sudo mv wappalyzer /usr/local/bin/wappalyzergo # Move e renomeia para 'wappalyzergo' para consistência
-          rm wappalyzergo.zip # Limpa o arquivo ZIP baixado
+          # REMOVIDO: Seções de instalação e limpeza do Wappalyzer-Go
+          # As linhas relacionadas ao wappalyzergo foram removidas.
 
       - name: 🌐 Ejecutar herramientas pasivas
         run: |
           echo "🔎 Dominio: ${{ inputs.dominio }}"
           
           echo "🧪 HTTPX:"
-          # Executa httpx e salva a saída JSON
           httpx -silent -title -tls-probe -status-code -tech-detect -ip -location -web-server -cdn -json -u ${{ inputs.dominio }} > httpx_output.json
-          cat httpx_output.json # Exibe no log do workflow
+          cat httpx_output.json
 
           echo "🧪 WhatWeb:"
-          # Executa whatweb e salva a saída de texto
           whatweb ${{ inputs.dominio }} > whatweb_output.txt
-          cat whatweb_output.txt # Exibe no log do workflow
+          cat whatweb_output.txt
 
-          echo "🧪 Wappalyzer CLI:"
-          # Executa wappalyzergo (o binário renomeado) e salva a saída JSON
-          wappalyzergo -urls ${{ inputs.dominio }} > wappalyzer_output.json
-          cat wappalyzer_output.json # Exibe no log do workflow
+          # REMOVIDO: Execução do Wappalyzer CLI
+          # A chamada 'wappalyzergo' foi removida.
 
       - name: 📄 Analizar headers y certificado SSL
         run: |
           echo "🔐 Headers y Certificados:"
-          # Obtém apenas os headers HTTP(S) do domínio
           curl -s -D - https://${{ inputs.dominio }} -o /dev/null > headers_output.txt
-          cat headers_output.txt # Exibe no log do workflow
+          cat headers_output.txt
           
-          # Obtém e exibe detalhes do certificado SSL/TLS
           echo | openssl s_client -servername ${{ inputs.dominio }} -connect ${{ inputs.dominio }}:443 2>/dev/null | openssl x509 -noout -text > cert_output.txt
-          cat cert_output.txt # Exibe no log do workflow
+          cat cert_output.txt
 
       - name: 🧠 Consolidar tecnologías detectadas
         id: tecnologias # ID para referenciar este passo
         run: |
-          # Extrai nomes de tecnologias do JSON do Wappalyzer, remove duplicatas e formata em string CSV
-          TECNOLOGIAS=$(cat wappalyzer_output.json | jq -r '.[].technologies[].name' | sort -u | paste -sd "," -)
+          # A partir de agora, a detecção de tecnologias dependerá APENAS do whatweb_output.txt
+          # NOTA: whatweb é mais limitado que wappalyzer para lista de tecnologias.
+          TECNOLOGIAS=$(cat whatweb_output.txt | grep -oP '\[[^\]]+\]' | sed 's/[\[\]]//g' | sort -u | paste -sd "," -)
+          if [ -z "$TECNOLOGIAS" ]; then
+            TECNOLOGIAS="No se detectaron tecnologías con WhatWeb."
+          fi
           echo "🧩 Tecnologías encontradas: $TECNOLOGIAS"
-          # Define a string de tecnologias como uma saída do passo para uso posterior
           echo "tecnologias=$TECNOLOGIAS" >> $GITHUB_OUTPUT
 
       - name: 🐞 Buscar CVEs en CIRCL para tecnologías detectadas
         run: |
           echo "🔍 Buscando CVEs relacionados..."
-          # Divide a string CSV de tecnologias em um array Bash
-          IFS=',' read -ra TECNOS <<< "${{ steps.tecnologias.outputs.tecnologias }}"
-          > cve_resultados.txt # Limpa o arquivo de resultados CVE antes de começar
+          # Verifica se há alguma tecnologia para pesquisar antes de tentar o CIRCL API
+          if [[ "${{ steps.tecnologias.outputs.tecnologias }}" == "No se detectaron tecnologías con WhatWeb." ]]; then
+            echo "No se encontraron tecnologías específicas para buscar CVEs." > cve_resultados.txt
+          else
+            IFS=',' read -ra TECNOS <<< "${{ steps.tecnologias.outputs.tecnologias }}"
+            > cve_resultados.txt # Limpa o arquivo de resultados CVE antes de começar
 
-          # Itera sobre cada tecnologia para buscar CVEs na API do CIRCL
-          for TEC in "${TECNOS[@]}"; do
-            echo "🔎 $TEC" >> cve_resultados.txt
-            # Adicionado -L para seguir redirects e -f para falhar silenciosamente se a API der erro
-            curl -s -L -f "https://cve.circl.lu/api/search/$TEC" | jq '.[] | select(.id != null) | "\(.id): \(.summary)"' >> cve_resultados.txt
-            echo "---" >> cve_resultados.txt # Separador para facilitar a leitura
-          done
-          cat cve_resultados.txt # Exibe os resultados dos CVEs no log
+            for TEC in "${TECNOS[@]}"; do
+              echo "🔎 $TEC" >> cve_resultados.txt
+              curl -s -L -f "https://cve.circl.lu/api/search/$TEC" | jq '.[] | select(.id != null) | "\(.id): \(.summary)"' >> cve_resultados.txt
+              echo "---" >> cve_resultados.txt
+            done
+          fi
+          cat cve_resultados.txt
 
       - name: ✅ Checklist Final (Español)
         run: |
           echo "📋 Checklist Final:"
           echo "Dominio: ${{ inputs.dominio }}"
           echo "---"
-          echo "1. ¿Tecnología detectada? ✅"
+          # Atualizado para refletir a dependência exclusiva de WhatWeb para tecnologias
+          if [[ "${{ steps.tecnologias.outputs.tecnologias }}" == "No se detectaron tecnologías con WhatWeb." ]]; then
+            echo "1. ¿Tecnología detectada? ❌ (Solo WhatWeb, puede ser limitado)"
+          else
+            echo "1. ¿Tecnología detectada? ✅ (Basado en WhatWeb)"
+          fi
           
           echo "2. ¿Es un Gateway de seguridad (WAF, API Gateway, Ingress)?"
-          # Verifica se há menções a gateways conhecidos nos outputs de whatweb ou headers
           if grep -i -E 'cloudflare|akamai|imperva|fastly|aws|api gateway|nginx ingress' whatweb_output.txt || grep -i -E 'x-forwarded|via|cf-ray|akamai|x-amz' headers_output.txt; then
             echo "➡️ Posible Gateway de seguridad detectado ✅"
           else
@@ -114,7 +109,6 @@ jobs:
           fi
 
           echo "3. ¿Pasa por Gateway (x-forwarded, headers específicos)?"
-          # Verifica headers comuns que indicam passagem por proxies/gateways
           if grep -i -E 'x-forwarded|via|x-amz' headers_output.txt; then
             echo "✅ Evidencia de paso por Gateway"
           else
@@ -122,7 +116,6 @@ jobs:
           fi
 
           echo "4. ¿Certificado válido y vigente?"
-          # Verifica se o certificado foi analisado (presença de "Not After")
           if grep -q "Not After" cert_output.txt; then
             echo "✅ Certificado analizado"
           else
@@ -130,9 +123,9 @@ jobs:
           fi
 
           echo "5. ¿CVEs encontrados?"
-          # Verifica se foram encontrados CVEs no arquivo de resultados
-          if grep -q "CVE-" cve_resultados.txt; then
+          # Ajustado para considerar o caso de nenhuma tecnologia detectada para CVEs
+          if grep -q "CVE-" cve_resultados.txt && [[ "${{ steps.tecnologias.outputs.tecnologias }}" != "No se detectaron tecnologías con WhatWeb." ]]; then
             echo "⚠️ Hay CVEs asociados a las tecnologías detectadas"
           else
-            echo "✅ No se encontraron CVEs relevantes"
+            echo "✅ No se encontraron CVEs relevantes o no se detectaron tecnologías para buscar."
           fi
