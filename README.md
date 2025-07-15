@@ -12,7 +12,7 @@ Workflow de GitHub Actions para análisis pasivo de seguridad en dominios o IPs,
 2. Selecciona **Inspeccion Gateway** → **Run workflow**.  
 3. Completa los campos:
 
-- `dominio`: dominio o IP (ej: juice-shop.herokuapp.com)  
+- `dominio`: dominio o IP (ej: [dominio].com)  
 - `gemini`: `true` para generar informe con Gemini, `false` para análisis estándar.
 
 ## 🧪 Qué analiza
