@@ -34,22 +34,22 @@ jobs:
           sudo apt-get update -y || echo "⚠️ Advertencia: No se pudo actualizar la lista de paquetes."
           sudo apt-get install -y jq unzip curl whatweb wafw00f nmap || { echo "❌ Error crítico: No se pudieron instalar las dependencias principales."; exit 1; }
           
-          # Instalação robusta do httpx com retry
+          # Instalación robusta de httpx con reintentos
           echo "📥 Descargando e instalando httpx..."
           MAX_RETRIES=5
           RETRY_DELAY=5
           DOWNLOAD_URL=""
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Intento $i de $MAX_RETRIES para descargar httpx..."
-            # Tenta obter a URL de download. Adicionado '|| echo "{}"' para garantir que jq receba um JSON válido (mesmo que vazio) em caso de falha do curl.
+            # Intenta obtener la URL de descarga. Se añade '|| echo "{}"' para asegurar que jq reciba un JSON válido (aunque vacío) en caso de fallo de curl.
             TEMP_JSON_RESPONSE=$(curl -s https://api.github.com/repos/projectdiscovery/httpx/releases/latest || echo "{}")
-            DOWNLOAD_URL=$(echo "$TEMP_JSON_RESPONSE" | jq -r '.assets[] | select(.name | test("httpx_.*_linux_amd64.zip")) | .browser_download_url' 2>/dev/null || echo "") # Garante que DOWNLOAD_URL seja vazia se jq falhar
+            DOWNLOAD_URL=$(echo "$TEMP_JSON_RESPONSE" | jq -r '.assets[] | select(.name | test("httpx_.*_linux_amd64.zip")) | .browser_download_url' 2>/dev/null || echo "") # Asegura que DOWNLOAD_URL esté vacía si jq falla
             
-            if [ -n "$DOWNLOAD_URL" ]; then # Verifica se a URL foi encontrada e não está vazia
+            if [ -n "$DOWNLOAD_URL" ]; then # Verifica si la URL fue encontrada y no está vacía
               echo "URL de descarga de httpx encontrada: $DOWNLOAD_URL"
-              # Tenta baixar o arquivo. Se o download falhar, o loop continua.
+              # Intenta descargar el archivo. Si la descarga falla, el bucle continúa.
               if curl -L -o httpx.zip "$DOWNLOAD_URL"; then
-                break # Sai do loop se o download for bem-sucedido
+                break # Sale del bucle si la descarga es exitosa
               else
                 echo "⚠️ Advertencia: Falló la descarga de httpx.zip en el intento $i."
               fi
@@ -99,11 +99,11 @@ jobs:
           nmap -Pn -p 80,443 ${{ inputs.dominio }} | tee nmap_output.txt >> gateinspector_raw_logs.txt || echo "Error en el escaneo de puertos con Nmap." >> gateinspector_raw_logs.txt
           echo "---" >> gateinspector_raw_logs.txt
 
-      - name: 📄 Analizar Headers y Certificado SSL
+      - name: 📄 Analizar Cabeceras y Certificado SSL
         id: analyze_certs 
         run: |
-          echo "🔐 Obteniendo Headers HTTP/S..."
-          curl -s -D - https://${{ inputs.dominio }} -o /dev/null | tee headers_output.txt >> gateinspector_raw_logs.txt || echo "Error al obtener headers HTTP/S." >> gateinspector_raw_logs.txt
+          echo "🔐 Obteniendo Cabeceras HTTP/S..."
+          curl -s -D - https://${{ inputs.dominio }} -o /dev/null | tee headers_output.txt >> gateinspector_raw_logs.txt || echo "Error al obtener cabeceras HTTP/S." >> gateinspector_raw_logs.txt
           echo "---" >> gateinspector_raw_logs.txt
           
           echo "📜 Obteniendo Certificado SSL/TLS..."
@@ -163,7 +163,6 @@ jobs:
         run: |
           echo "🧩 Consolidando información para el informe y el checklist..." >> gateinspector_raw_logs.txt
           
-          # CORREÇÃO AQUI: Limpeza mais robusta dos nomes das tecnologias do WhatWeb
           CLEAN_WHATWEB_OUTPUT=$(sed 's/\x1b\[[0-9;]*m//g' whatweb_output.txt 2>/dev/null)
           TECNOLOGIAS_WHATWEB=$(echo "$CLEAN_WHATWEB_OUTPUT" | \
             grep -oP '\[\s*\K[^\]]+' | \
@@ -198,7 +197,7 @@ jobs:
           else
             IFS=',' read -ra TECNOS <<< "${{ steps.consolidated_data.outputs.tecnologias }}"
             for TEC in "${TECNOS[@]}"; do
-              if [[ ${#TEC} -lt 3 ]]; then # Pula termos muito curtos
+              if [[ ${#TEC} -lt 3 ]]; then
                 continue
               fi
               echo "🔎 Buscando CVEs para: **$TEC**" >> cve_resultados.txt
@@ -211,7 +210,7 @@ jobs:
           echo "---"
 
       - name: 🤖 Generar Informe con Gemini (Opcional)
-        id: generate_gemini_report # Adicionado ID para o passo do Gemini
+        id: generate_gemini_report
         if: inputs.gemini == 'true'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -222,40 +221,53 @@ jobs:
 
           if [ ! -s gateinspector_raw_logs.txt ]; then
             echo "❌ Archivo de log 'gateinspector_raw_logs.txt' no encontrado o vacío. No se puede generar el informe de Gemini."
-            echo "gemini_report_status=failed" >> $GITHUB_OUTPUT # Publica status de falha
+            echo "gemini_report_status=failed" >> $GITHUB_OUTPUT
             exit 1
           fi
           
           LOG_CONTENT=$(sed 's/\x1b\[[0-9;]*m//g' gateinspector_raw_logs.txt)
 
-          PROMPT_TEXT="Eres un experto en ciberseguridad y pentester. Analiza los siguientes logs brutos generados por las herramientas HTTPX, WhatWeb, Wafw00f, Nmap, y curl (para headers y certificados SSL) para el objetivo '${{ inputs.dominio }}'. Crea un informe claro y conciso en formato Markdown.
+          # --- PROMPT PARA EL GEMINI ---
+          PROMPT_TEXT="Eres un experto en ciberseguridad y pentester. Analiza los siguientes logs brutos generados por las herramientas HTTPX, WhatWeb, Wafw00f, Nmap, y curl (para cabeceras y certificados SSL) para el objetivo '${{ inputs.dominio }}'. Crea un informe claro y conciso en formato Markdown.
 
           El informe debe contener las siguientes secciones:
 
-          1.  **Resumen Ejecutivo:** Un párrafo conciso con las principales conclusiones de la inspección pasiva, destacando si se detectó un gateway de seguridad o WAF y la salud general del objetivo.
-          2.  **Información General del Objetivo:**
-              * **Dominio/IP:** ${{ inputs.dominio }}
-              * **Tecnologías Identificadas (HTTPX, WhatWeb):** Enumera las tecnologías detectadas, incluyendo versiones si están disponibles.
-              * **Servidor Web:** (Si se detecta)
-              * **CDN/WAF Detectado (Wafw00f, Headers):** Indica si se detectó un WAF o CDN, y cuál.
-              * **Puertos Abiertos (Nmap):** Lista los puertos 80 y 443 y su estado.
-          3.  **Análisis de Certificado SSL/TLS:**
-              * **Emisor:**
-              * **Sujeto:**
-              * **Validez (Desde/Hasta):**
-              * **Nombres Alternativos (SANs):**
-              * **Estado de Expiración:** (Válido, próximo a expirar, expirado, no obtenido)
-          4.  **Análisis de Encabezados HTTP/S:**
-              * **Headers de Seguridad Clave:** (X-XSS-Protection, Strict-Transport-Security, Content-Security-Policy, X-Frame-Options, X-Content-Type-Options) y su estado (presente/ausente, valor).
-              * **Headers de Información (Server, X-Powered-By):** Si se detectan, con sus valores.
-              * **Headers de Proxy/CDN (X-Forwarded-For, Via, CF-Ray, etc.):** Indica si se detectan y si sugieren un paso por gateway.
-          5.  **Vulnerabilidades Potenciales y Riesgos (Basado en CVEs y Tecnologías):**
-              * Basado en las tecnologías identificadas, lista posibles vectores de ataque o CVEs conocidas que podrían ser explotadas. Sé específico (ej: 'La versión X de Nginx es vulnerable a Y'). Considera si el WAF/Gateway es vulnerable o si está mal configurado.
-              * Analiza si la ausencia de headers de seguridad clave representa un riesgo.
-          6.  **Recomendaciones y Próximos Pasos:** Sugiere los próximos 3 a 5 pasos para profundizar la análisis de seguridad y mejorar la postura de seguridad del objetivo.
+          ## 0. Resumen Rápido (Checklist):
+          Basado en tu análisis de los logs brutos, genera un checklist conciso con el formato 'Emoji Descripción del punto'. Utiliza ✅ para positivo/seguro, ❌ para negativo/inseguro, ⚠️ para atención/aviso (e.g., CVEs, certificado expirando), y ❓ para desconocido/error.
+          Asegúrate de que las descripciones de los puntos sean **idénticas** a las siguientes y que los emojis estén a la izquierda:
+          - ✅ Gateway de Seguridad (WAF, Ingress, CDN, etc.) detectado
+          - ✅ Tráfico pasa por Gateway/Proxy
+          - ✅ Tecnología detectada
+          - ✅ Certificado SSL/TLS válido y vigente
+          - ⚠️ CVEs encontrados para tecnologías detectadas (revisar)
+
+          ## 1. Resumen Ejecutivo:
+          Un párrafo conciso con las principales conclusiones de la inspección pasiva, destacando si se detectó un gateway de seguridad o WAF y la salud general del objetivo.
+          ## 2. Información General del Objetivo:
+          * **Dominio/IP:** ${{ inputs.dominio }}
+          * **Tecnologías Identificadas (HTTPX, WhatWeb):** Enumera las tecnologías detectadas, incluyendo versiones si están disponibles.
+          * **Servidor Web:** (Si se detecta)
+          * **CDN/WAF Detectado (Wafw00f, Cabeceras):** Indica si se detectó un WAF o CDN, y cuál.
+          * **Puertos Abiertos (Nmap):** Lista los puertos 80 y 443 y su estado.
+          ## 3. Análisis de Certificado SSL/TLS:
+          * **Emisor:**
+          * **Sujeto:**
+          * **Validez (Desde/Hasta):**
+          * **Nombres Alternativos (SANs):**
+          * **Estado de Expiración:** (Válido, próximo a expirar, expirado, no obtenido)
+          ## 4. Análisis de Cabeceras HTTP/S:
+          * **Cabeceras de Seguridad Clave:** (X-XSS-Protection, Strict-Transport-Security, Content-Security-Policy, X-Frame-Options, X-Content-Type-Options) y su estado (presente/ausente, valor).
+          * **Cabeceras de Información (Server, X-Powered-By):** Si se detectan, con sus valores.
+          * **Cabeceras de Proxy/CDN (X-Forwarded-For, Via, CF-Ray, etc.):** Indica si se detectan y si sugieren un paso por gateway.
+          ## 5. Vulnerabilidades Potenciales y Riesgos (Basado en CVEs y Tecnologías):
+          * Basado en las tecnologías identificadas, lista posibles vectores de ataque o CVEs conocidas que podrían ser explotadas. Sé específico (ej: 'La versión X de Nginx es vulnerable a Y'). Considera si el WAF/Gateway es vulnerable o si está mal configurado.
+          * Analiza si la ausencia de cabeceras de seguridad clave representa un riesgo.
+          ## 6. Recomendaciones y Próximos Pasos:
+          Sugiere los próximos 3 a 5 pasos para profundizar el análisis de seguridad y mejorar la postura de seguridad del objetivo.
 
           Aquí están los logs brutos completos de todas las herramientas. Analízalos cuidadosamente para extraer toda la información relevante y generar el informe según el formato solicitado.
           "
+          # --- FIN DEL PROMPT ---
 
           (
             echo '{ "contents": [ { "parts": [ { "text": "'
@@ -289,7 +301,6 @@ jobs:
           cat gemini_report.md
           echo "---------------------------------------------------------"
           rm gemini_api_response.json
-          echo "gemini_report_status=success" >> $GITHUB_OUTPUT # Publica status de sucesso
 
       - name: ✅ Conclusión Final del Análisis
         run: |
@@ -297,9 +308,8 @@ jobs:
           echo "✨ **CONCLUSIÓN FINAL DEL ANÁLISIS DE INSPECCIÓN GATEWAY** ✨"
           echo "---"
 
-          # Verifica se o Gemini foi ativado e se o relatório foi gerado com sucesso
           if [[ "${{ inputs.gemini }}" == "true" && "${{ steps.generate_gemini_report.outputs.gemini_report_status }}" == "success" && -s "gemini_report.md" ]]; then
-            echo "✅ **¡Análisis Completo y Empoderado por Gemini AI!**"
+            echo "✅ **¡Análisis Completo y Potenciado por Gemini AI!**"
             echo "El informe detallado generado por la inteligencia artificial de Gemini proporciona una visión profunda y recomendaciones específicas."
             echo "Por favor, revise el informe a continuación o descargue 'gemini_report.md' de los artefactos del workflow."
             echo ""
@@ -311,50 +321,54 @@ jobs:
             echo "El informe de Gemini no fue solicitado o no pudo ser generado. La siguiente es una tabla resumen de los hallazgos."
             echo "Para un análisis más profundo, considere activar la opción 'Gemini' en la próxima ejecución."
             echo ""
-            # Re-executa o checklist final para garantir que esteja visível aqui
-            # (Este é um duplicado do passo anterior, mas garante a visibilidade na conclusão)
             echo "📋 **Resumen de Hallazgos (Checklist Estándar):**"
             echo "Dominio: **${{ inputs.dominio }}**"
             echo "---"
             
-            if [[ "${{ steps.consolidated_data.outputs.tecnologias }}" == "No se detectaron tecnologías específicas con WhatWeb." ]]; then
-              echo "1. ¿Tecnología detectada? ❌ (WhatWeb es limitado. Puede requerir análisis manual.)"
+            # Formato: "Emoji Descripción del punto"
+            # Usamos printf para un control de espaciado más preciso.
+
+            # 1. ¿Es un Gateway de Seguridad (WAF, API Gateway, Ingress, Firewall, Load Balancer)?
+            if [[ "${{ steps.consolidated_data.outputs.gateway_detected }}" == "true" ]]; then
+              printf "%s %s\n" "✅" "Gateway de Seguridad (WAF, Ingress, CDN, etc.) detectado"
             else
-              echo "1. ¿Tecnología detectada? ✅ (Basado en WhatWeb)"
+              printf "%s %s\n" "❌" "Ningún Gateway de Seguridad aparente detectado"
+            fi
+
+            # 2. ¿Pasa el tráfico por un Gateway (X-Forwarded-For, Via, etc.)?
+            if cat headers_output.txt 2>/dev/null | grep -i -E 'x-forwarded|via|x-amz|x-cdn|x-gw|x-proxy'; then
+              printf "%s %s\n" "✅" "Tráfico pasa por Gateway/Proxy"
+            else
+              printf "%s %s\n" "❌" "Tráfico NO pasa por Gateway/Proxy aparente"
+            fi
+
+            # 3. ¿Tecnología detectada?
+            if [[ "${{ steps.consolidated_data.outputs.tecnologias }}" == "No se detectaron tecnologías específicas con WhatWeb." ]]; then
+              printf "%s %s\n" "❌" "Ninguna tecnología específica detectada (WhatWeb limitado)"
+            else
+              printf "%s %s\n" "✅" "Tecnología detectada"
             fi
             
-            echo "2. ¿Es un Gateway de seguridad (WAF, API Gateway, Ingress, Firewall, Balanceador de Carga)?"
-            if [[ "${{ steps.consolidated_data.outputs.gateway_detected }}" == "true" ]]; then
-              echo "➡️ **Posible Gateway de seguridad detectado ✅**"
-            else
-              echo "❌ No se detectó Gateway de seguridad aparente."
-            fi
-
-            echo "3. ¿Pasa por Gateway (x-forwarded, headers específicos de proxy/CDN)?"
-            if cat headers_output.txt 2>/dev/null | grep -i -E 'x-forwarded|via|x-amz|x-cdn|x-gw|x-proxy'; then
-              echo "✅ Evidencia de paso por Gateway."
-            else
-              echo "❌ No hay evidencia clara de paso por Gateway."
-            fi
-
-            echo "4. ¿Certificado válido y vigente?"
-            echo "Estado: ${{ steps.cert_summary.outputs.cert_expiration_status }}"
+            # 4. ¿Certificado SSL/TLS válido y vigente?
             if [[ "${{ steps.cert_summary.outputs.cert_expiration_status }}" == "Válido" ]]; then
-              echo "✅ Certificado válido."
+              printf "%s %s\n" "✅" "Certificado SSL/TLS válido y vigente"
             elif [[ "${{ steps.cert_summary.outputs.cert_expiration_status }}" == "Próximo a expirar"* ]]; then
-              echo "⚠️ Certificado próximo a expirar."
+              printf "%s %s\n" "⚠️" "Certificado SSL/TLS próximo a expirar"
             elif [[ "${{ steps.cert_summary.outputs.cert_expiration_status }}" == "Expirado" ]]; then
-              echo "❌ Certificado expirado."
+              printf "%s %s\n" "❌" "Certificado SSL/TLS expirado"
             else
-              echo "⚠️ Estado del certificado desconocido o no obtenido."
+              printf "%s %s\n" "❓" "Estado del Certificado SSL/TLS desconocido/error"
             fi
 
-            echo "5. ¿CVEs encontrados?"
+            # 5. ¿CVEs encontrados para tecnologías detectadas?
             if [ -s "cve_resultados.txt" ] && grep -q "CVE-" cve_resultados.txt; then
-              echo "⚠️ **¡Hay CVEs asociados a las tecnologías detectadas!** Se recomienda revisión."
+              printf "%s %s\n" "⚠️" "CVEs encontrados para tecnologías detectadas (revisar)"
             else
-              echo "✅ No se encontraron CVEs relevantes o no se detectaron tecnologías para buscar."
+              printf "%s %s\n" "✅" "Ningún CVE relevante encontrado"
             fi
+            echo "---"
+            echo "💡 **Consideraciones de Seguridad (Análisis Estándar):**"
+            echo "La presencia de un Gateway de Seguridad y el paso del tráfico a través de él son indicadores clave de una postura de seguridad perimetral. La ausencia de estos elementos o la detección de CVEs requiere una investigación y mitigación inmediatas. Un certificado expirado o próximo a expirar también es un riesgo crítico."
             echo "---"
           fi
           echo "--- FIN DEL ANÁLISIS ---"
