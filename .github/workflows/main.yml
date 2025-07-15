@@ -2,6 +2,11 @@ name: 🔍 Inspección Pasiva de Gateway
 
 on:
   workflow_dispatch:
+    inputs:
+      dominio:
+        description: "Dominio o IP objetivo (sin http/https)"
+        required: true
+        default: "juice-shop.herokuapp.com"
 
 jobs:
   analisis-superficie:
@@ -20,7 +25,7 @@ jobs:
           echo "$HOME/go/bin" >> $GITHUB_PATH
 
       - name: 📄 Crear archivo de objetivos
-        run: echo "juice-shop.herokuapp.com" > objetivos.txt
+        run: echo "${{ github.event.inputs.dominio }}" > objetivos.txt
 
       - name: 🌐 Ejecutar httpx (detección pasiva)
         run: |
