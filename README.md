@@ -1,35 +1,36 @@
 # 🔍 Inspeccion Gateway
 
-Workflow de GitHub Actions para análisis pasivo de seguridad en dominios o IPs, con enfoque en detección de **WAFs, Gateways, Ingress, CDNs** y certificado SSL. Opcionalmente, genera un informe detallado con **IA Gemini**.
+Workflow de GitHub Actions para análisis pasivo de seguridad en dominios o IPs, enfocado en detección de **WAFs, Gateways, Ingress, CDNs** y certificado SSL. Puede generar un informe detallado con **IA Gemini**.
+
+> ⚠️ **Este proyecto fue creado con fines educativos. No debe ejecutarse sin autorización explícita del propietario del objetivo.**
 
 ## 🚀 Uso
 
 1. Ve a la pestaña **Actions** del repositorio.  
 2. Selecciona **Inspeccion Gateway** → **Run workflow**.  
-3. Rellena los campos:
+3. Completa los campos:
 
 - `dominio`: dominio o IP (ej: juice-shop.herokuapp.com)  
-- `gemini`: `true` para generar informe con Gemini, `false` para modo estándar.
+- `gemini`: `true` para generar informe con Gemini, `false` para análisis estándar.
 
-## 🧪 Qué hace
+## 🧪 Qué analiza
 
-- Detecta tecnologías (HTTPX, WhatWeb)  
-- Analiza headers y certificado SSL  
-- Escanea puertos 80 y 443 (Nmap)  
-- Detecta WAFs y proxies  
-- Consulta CVEs (CIRCL)
+- Tecnologías expuestas (HTTPX, WhatWeb)  
+- Cabeceras HTTP/S y certificado SSL  
+- Puertos 80 y 443 (Nmap)  
+- WAFs / proxies detectados  
+- CVEs asociados (CIRCL)
 
-## 📋 Salida
+## 📄 Resultados
 
-- ✅ Checklist resumido (modo estándar)  
-- 📄 `gemini_report.md` (si Gemini está activado)  
-- Archivos técnicos: `httpx_output.json`, `cert_output.txt`, `cve_resultados.txt`, etc.
+- ✅ Checklist estándar (en logs)  
+- 📄 `gemini_report.md` (si se activa Gemini)  
+- Otros: `httpx_output.json`, `cert_output.txt`, `cve_resultados.txt`, etc.
 
-## 🔐 Requisitos para Gemini
+## 🔐 Para usar Gemini
 
-Agregar secreto `GEMINI_API_KEY` en GitHub:
+Agregar secreto `GEMINI_API_KEY` en GitHub:  
 ``Settings → Secrets → New repository secret``
 
----
 
-Made with ❤️ by CNetSec · Potenciado por Gemini AI
+Made with por CNetSec · Potenciado por Gemini AI
