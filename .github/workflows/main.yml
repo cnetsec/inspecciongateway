@@ -16,12 +16,12 @@ jobs:
       - name: ⬇️ Checkout del repositorio
         uses: actions/checkout@v4
 
-      - name: ⚙️ Instalar dependencias necesarias
+      - name: ⚙️ Instalar dependencias necessárias
         run: |
-          sudo apt update
-          sudo apt install -y jq unzip curl whatweb
+          sudo apt-get update
+          sudo apt-get install -y jq unzip curl whatweb
 
-          # Instalación robusta del httpx
+          # Instalação robusta do httpx
           curl -s https://api.github.com/repos/projectdiscovery/httpx/releases/latest \
             | jq -r '.assets[] | select(.name | test("httpx_.*_linux_amd64.zip")) | .browser_download_url' \
             | xargs curl -L -o httpx.zip
@@ -29,16 +29,18 @@ jobs:
           chmod +x httpx
           sudo mv httpx /usr/local/bin/httpx
 
-          # Instalación del Wappalyzer CLI
-          curl -L https://github.com/projectdiscovery/wappalyzergo/releases/latest/download/wappalyzer_linux_amd64.zip -o wappalyzer.zip
-          unzip wappalyzer.zip
-          chmod +x wappalyzer
-          sudo mv wappalyzer /usr/local/bin/wappalyzer
+          # Instalação robusta do Wappalyzer-Go
+          curl -s https://api.github.com/repos/projectdiscovery/wappalyzergo/releases/latest \
+            | jq -r '.assets[] | select(.name | test("wappalyzergo_.*_linux_amd64.zip")) | .browser_download_url' \
+            | xargs curl -L -o wappalyzergo.zip
+          unzip wappalyzergo.zip
+          chmod +x wappalyzergo
+          sudo mv wappalyzergo /usr/local/bin/wappalyzergo
 
       - name: 🌐 Ejecutar herramientas pasivas
         run: |
           echo "🔎 Dominio: ${{ inputs.dominio }}"
-
+          
           echo "🧪 HTTPX:"
           httpx -silent -title -tls-probe -status-code -tech-detect -ip -location -web-server -cdn -json -u ${{ inputs.dominio }} > httpx_output.json
           cat httpx_output.json
@@ -48,7 +50,8 @@ jobs:
           cat whatweb_output.txt
 
           echo "🧪 Wappalyzer CLI:"
-          wappalyzer -urls ${{ inputs.dominio }} > wappalyzer_output.json
+          # Corrigido para usar o binário correto
+          wappalyzergo -urls ${{ inputs.dominio }} > wappalyzer_output.json
           cat wappalyzer_output.json
 
       - name: 📄 Analizar headers y certificado SSL
@@ -56,7 +59,7 @@ jobs:
           echo "🔐 Headers y Certificados:"
           curl -s -D - https://${{ inputs.dominio }} -o /dev/null > headers_output.txt
           cat headers_output.txt
-
+          
           echo | openssl s_client -servername ${{ inputs.dominio }} -connect ${{ inputs.dominio }}:443 2>/dev/null | openssl x509 -noout -text > cert_output.txt
           cat cert_output.txt
 
@@ -74,7 +77,8 @@ jobs:
           > cve_resultados.txt
           for TEC in "${TECNOS[@]}"; do
             echo "🔎 $TEC" >> cve_resultados.txt
-            curl -s "https://cve.circl.lu/api/search/$TEC" | jq '.[] | select(.id != null) | "\(.id): \(.summary)"' >> cve_resultados.txt
+            # Adicionado -L para seguir redirects e -f para falhar silenciosamente se a API der erro
+            curl -s -L -f "https://cve.circl.lu/api/search/$TEC" | jq '.[] | select(.id != null) | "\(.id): \(.summary)"' >> cve_resultados.txt
             echo "---" >> cve_resultados.txt
           done
           cat cve_resultados.txt
@@ -85,10 +89,10 @@ jobs:
           echo "Dominio: ${{ inputs.dominio }}"
           echo "---"
           echo "1. ¿Tecnología detectada? ✅"
-
+          
           echo "2. ¿Es un Gateway de seguridad (WAF, API Gateway, Ingress)?"
           if grep -i -E 'cloudflare|akamai|imperva|fastly|aws|api gateway|nginx ingress' whatweb_output.txt || grep -i -E 'x-forwarded|via|cf-ray|akamai|x-amz' headers_output.txt; then
-            echo "➡️ Posible Gateway de seguridad detectado ✅"
+            echo "➡️  Posible Gateway de seguridad detectado ✅"
           else
             echo "❌ No se detectó Gateway de seguridad"
           fi
