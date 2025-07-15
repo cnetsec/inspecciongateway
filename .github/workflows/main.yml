@@ -20,25 +20,25 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y jq unzip curl whatweb
-          
-          # Instalação robusta do httpx
+
+          # Instalación robusta del httpx
           curl -s https://api.github.com/repos/projectdiscovery/httpx/releases/latest \
             | jq -r '.assets[] | select(.name | test("httpx_.*_linux_amd64.zip")) | .browser_download_url' \
             | xargs curl -L -o httpx.zip
           unzip httpx.zip
           chmod +x httpx
           sudo mv httpx /usr/local/bin/httpx
-          
-          # Instalação do Wappalyzer CLI
+
+          # Instalación del Wappalyzer CLI
           curl -L https://github.com/projectdiscovery/wappalyzergo/releases/latest/download/wappalyzer_linux_amd64.zip -o wappalyzer.zip
           unzip wappalyzer.zip
           chmod +x wappalyzer
           sudo mv wappalyzer /usr/local/bin/wappalyzer
 
-      - name: 🌐 Executar ferramentas passivas
+      - name: 🌐 Ejecutar herramientas pasivas
         run: |
           echo "🔎 Dominio: ${{ inputs.dominio }}"
-          
+
           echo "🧪 HTTPX:"
           httpx -silent -title -tls-probe -status-code -tech-detect -ip -location -web-server -cdn -json -u ${{ inputs.dominio }} > httpx_output.json
           cat httpx_output.json
@@ -56,7 +56,7 @@ jobs:
           echo "🔐 Headers y Certificados:"
           curl -s -D - https://${{ inputs.dominio }} -o /dev/null > headers_output.txt
           cat headers_output.txt
-          
+
           echo | openssl s_client -servername ${{ inputs.dominio }} -connect ${{ inputs.dominio }}:443 2>/dev/null | openssl x509 -noout -text > cert_output.txt
           cat cert_output.txt
 
@@ -85,10 +85,10 @@ jobs:
           echo "Dominio: ${{ inputs.dominio }}"
           echo "---"
           echo "1. ¿Tecnología detectada? ✅"
+
           echo "2. ¿Es un Gateway de seguridad (WAF, API Gateway, Ingress)?"
-          
           if grep -i -E 'cloudflare|akamai|imperva|fastly|aws|api gateway|nginx ingress' whatweb_output.txt || grep -i -E 'x-forwarded|via|cf-ray|akamai|x-amz' headers_output.txt; then
-            echo "➡️  Posible Gateway de seguridad detectado ✅"
+            echo "➡️ Posible Gateway de seguridad detectado ✅"
           else
             echo "❌ No se detectó Gateway de seguridad"
           fi
