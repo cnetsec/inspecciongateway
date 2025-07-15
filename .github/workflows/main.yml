@@ -29,9 +29,9 @@ jobs:
           chmod +x httpx
           sudo mv httpx /usr/local/bin/httpx
 
-          # Instalação robusta do Wappalyzer-Go
+          # Instalação robusta do Wappalyzer-Go (COM O HÍFEN CORRIGIDO)
           curl -s https://api.github.com/repos/projectdiscovery/wappalyzergo/releases/latest \
-            | jq -r '.assets[] | select(.name | test("wappalyzergo_.*_linux_amd64.zip")) | .browser_download_url' \
+            | jq -r '.assets[] | select(.name | test("wappalyzergo-linux-amd64.zip")) | .browser_download_url' \
             | xargs curl -L -o wappalyzergo.zip
           unzip wappalyzergo.zip
           chmod +x wappalyzergo
@@ -50,7 +50,6 @@ jobs:
           cat whatweb_output.txt
 
           echo "🧪 Wappalyzer CLI:"
-          # Corrigido para usar o binário correto
           wappalyzergo -urls ${{ inputs.dominio }} > wappalyzer_output.json
           cat wappalyzer_output.json
 
@@ -77,7 +76,6 @@ jobs:
           > cve_resultados.txt
           for TEC in "${TECNOS[@]}"; do
             echo "🔎 $TEC" >> cve_resultados.txt
-            # Adicionado -L para seguir redirects e -f para falhar silenciosamente se a API der erro
             curl -s -L -f "https://cve.circl.lu/api/search/$TEC" | jq '.[] | select(.id != null) | "\(.id): \(.summary)"' >> cve_resultados.txt
             echo "---" >> cve_resultados.txt
           done
