@@ -4,6 +4,8 @@ Workflow de GitHub Actions para análisis pasivo de seguridad en dominios o IPs,
 
 > ⚠️ **Este proyecto fue creado con fines educativos. No debe ejecutarse sin autorización explícita del propietario del objetivo.**
 
+<img width="1080" height="1104" alt="image" src="https://github.com/user-attachments/assets/86cf7485-a961-432f-a720-c120cbf1861b" />
+
 ## 🚀 Uso
 
 1. Ve a la pestaña **Actions** del repositorio.  
