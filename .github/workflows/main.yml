@@ -4,97 +4,109 @@ on:
   workflow_dispatch:
     inputs:
       dominio:
-        description: '🌐 Dominio objetivo'
+        description: '🌐 Dominio o IP objetivo'
         required: true
-        type: string
+        default: ''
+      user_agent:
+        description: '🧠 User-Agent personalizado (opcional)'
+        required: false
+        default: 'Mozilla/5.0 (compatible; InspeccionGatewayBot/1.0)'
 
 jobs:
   inspeccion-pasiva:
     runs-on: ubuntu-latest
-
     steps:
-      - name: 🚥 Preparar entorno
-        run: |
-          sudo apt update
-          sudo apt install -y whatweb jq curl unzip golang
 
-      - name: 🔧 Instalar httpx via Go
-        run: |
-          go install github.com/projectdiscovery/httpx/cmd/httpx@latest
-          sudo mv ~/go/bin/httpx /usr/local/bin/
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
 
-      - name: 📁 Criar arquivo de objetivos
+      - name: 🧰 Instalar dependencias
+        run: |
+          sudo apt update -y
+          sudo apt install -y jq unzip curl whatweb
+          wget -q https://github.com/projectdiscovery/httpx/releases/latest/download/httpx_amd64.tar.gz
+          tar -xvzf httpx_amd64.tar.gz
+          sudo mv httpx /usr/local/bin/httpx
+          npm install -g wappalyzer
+
+      - name: 📌 Preparar objetivo
         run: echo "${{ inputs.dominio }}" > objetivos.txt
 
-      - name: 🌐 Executar httpx
+      - name: 🔎 Executar httpx
         run: |
           httpx -l objetivos.txt -title -tech-detect -tls-grab -json -no-color -silent > salida_httpx.json || echo "[]" > salida_httpx.json
 
-      - name: 🕵️ Executar whatweb
+      - name: 🔎 Executar whatweb
         run: |
           whatweb "${{ inputs.dominio }}" > salida_whatweb.txt || echo "error" > salida_whatweb.txt
 
-      - name: 💡 Detectar tecnología (fallback)
+      - name: 🌐 Executar Wappalyzer
+        run: |
+          wappalyzer "${{ inputs.dominio }}" > salida_wappalyzer.json || echo "{}" > salida_wappalyzer.json
+
+      - name: 🤖 Detectar tecnologia
         id: tecnologia
         run: |
           tecnologia=$(jq -r '.[0].webserver // .[0].cdn_name // .[0].tls.issuer_cn // .[0].tls.subject_cn // empty' salida_httpx.json | head -n 1)
-          if [ -z "$tecnologia" ]; then tecnologia="desconocida"; fi
+          if [[ -z "$tecnologia" ]]; then
+            tecnologia=$(cat salida_whatweb.txt | head -n 1 | cut -d',' -f1 | awk '{print $1}')
+          fi
+          if [[ -z "$tecnologia" ]]; then
+            tecnologia=$(jq -r '.technologies[0].name // empty' salida_wappalyzer.json)
+          fi
+          tecnologia=${tecnologia:-desconocida}
           echo "💡 Tecnología detectada: $tecnologia"
-          echo "tec=$tecnologia" >> "$GITHUB_OUTPUT"
+          echo "tecnologia=$tecnologia" >> "$GITHUB_OUTPUT"
 
-      - name: 🔍 Buscar CVEs na base CIRCL
+      - name: 📄 Buscar CVEs con CIRCL
         id: cves
         run: |
-          tecnologia="${{ steps.tecnologia.outputs.tec }}"
+          tecnologia="${{ steps.tecnologia.outputs.tecnologia }}"
           echo "🔍 Buscando CVEs para: $tecnologia"
           cve_result=$(curl -s "https://cve.circl.lu/api/search/$tecnologia" || echo "null")
           tem_cve="❌"
           if [[ "$cve_result" != "null" && "$cve_result" != "[]" && "$cve_result" != "{}" ]]; then
             tem_cve="✅"
           fi
-          echo "has_cve=$tem_cve" >> "$GITHUB_OUTPUT"
           echo "$cve_result" > salida_cves.json
+          echo "has_cve=$tem_cve" >> "$GITHUB_OUTPUT"
 
-      - name: ✅ Checklist Final Inteligente
+      - name: ✅ Checklist de Seguridad
         run: |
-          tecnologia="${{ steps.tecnologia.outputs.tec }}"
-          tem_cve="${{ steps.cves.outputs.has_cve }}"
-          passa_gateway="❌"
-          tipo_gateway="❌"
-          nao_passa_gateway="❌"
-          tls="❌"
+          tecnologia="${{ steps.tecnologia.outputs.tecnologia }}"
+          has_cve="${{ steps.cves.outputs.has_cve }}"
+          tls_ativo=$(jq '.[0].tls | select(.subject_cn != null)' salida_httpx.json)
+          if [[ -n "$tls_ativo" ]]; then tls="✅"; else tls="❌"; fi
 
-          if grep -q 'x-forwarded-for\|x-amz-apigateway' salida_whatweb.txt; then
-            passa_gateway="✅"
+          # Heurística simples
+          if echo "$tecnologia" | grep -iqE 'gateway|akamai|imperva|cloudflare|forti|barracuda|f5|proxy|cdn'; then
+            is_gateway="✅"
+            passes_gateway="✅"
+            no_gateway="❌"
+          elif grep -iq 'X-Forwarded-For' salida_httpx.json || grep -iq 'Via:' salida_httpx.json; then
+            is_gateway="❌"
+            passes_gateway="✅"
+            no_gateway="❌"
+          else
+            is_gateway="❌"
+            passes_gateway="❌"
+            no_gateway="✅"
           fi
 
-          if echo "$tecnologia" | grep -iE 'gateway|ingress|nginx|haproxy|envoy|cloudflare|akamai|api|modsecurity|aws|forti|check|f5|paloalto'; then
-            tipo_gateway="✅"
-          fi
+          echo "### 🛡️ Checklist Final de Seguridad"
+          echo "- 🌐 Tecnología detectada: $tecnologia"
+          echo "- 🔐 ¿Es un Gateway de Seguridad?: $is_gateway"
+          echo "- ➡️ ¿Pasa por Gateway de Seguridad?: $passes_gateway"
+          echo "- 🔓 ¿No pasa por Gateway de Seguridad?: $no_gateway"
+          echo "- 📄 ¿Tiene CVEs asociados?: $has_cve"
+          echo "- 🔒 ¿Tiene TLS activo?: $tls"
 
-          if [[ "$passa_gateway" == "❌" && "$tipo_gateway" == "❌" ]]; then
-            nao_passa_gateway="✅"
-          fi
-
-          if grep -q 'tls' salida_httpx.json; then
-            tls="✅"
-          fi
-
-          echo "### 🛡️ Checklist Final de Seguridad" > logs_gatewayinspector.txt
-          echo "- 🌐 Tecnología detectada: $tecnologia" >> logs_gatewayinspector.txt
-          echo "- 🔐 ¿Es un Gateway de Seguridad?: $tipo_gateway" >> logs_gatewayinspector.txt
-          echo "- ➡️ ¿Pasa por Gateway de Seguridad?: $passa_gateway" >> logs_gatewayinspector.txt
-          echo "- 🔓 ¿No pasa por Gateway de Seguridad?: $nao_passa_gateway" >> logs_gatewayinspector.txt
-          echo "- 📄 ¿Tiene CVEs asociados?: $tem_cve" >> logs_gatewayinspector.txt
-          echo "- 🔒 ¿Tiene TLS activo?: $tls" >> logs_gatewayinspector.txt
-          cat logs_gatewayinspector.txt
-
-      - name: 📦 Salvar artefatos
+      - name: 📦 Subir resultados
         uses: actions/upload-artifact@v4
         with:
           name: resultados-inspecciongateway
           path: |
             salida_httpx.json
             salida_whatweb.txt
+            salida_wappalyzer.json
             salida_cves.json
-            logs_gatewayinspector.txt
