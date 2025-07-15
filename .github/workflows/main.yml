@@ -235,7 +235,7 @@ jobs:
           ## 0. Resumen Rápido (Checklist):
           Basado en tu análisis de los logs brutos, genera un checklist conciso con el formato 'Emoji Descripción del punto'. Utiliza ✅ para positivo/seguro, ❌ para negativo/inseguro, ⚠️ para atención/aviso (e.g., CVEs, certificado expirando), y ❓ para desconocido/error.
           Asegúrate de que las descripciones de los puntos sean **idénticas** a las siguientes y que los emojis estén a la izquierda:
-          - ✅ El objetivo es un Gateway de Seguridad (WAF, Ingress, CDN, etc.)
+          - ✅ El alvo es un Gateway de Seguridad (WAF, Ingress, CDN, etc.)
           - ✅ El tráfico pasa por un Gateway/Proxy
           - ✅ Tecnología detectada
           - ✅ Certificado SSL/TLS válido y vigente
@@ -328,11 +328,11 @@ jobs:
             # Formato: "Emoji Descripción del punto"
             # Usamos printf para un control de espaciado más preciso.
 
-            # 1. ¿El objetivo es un Gateway de Seguridad (WAF, API Gateway, Ingress, Firewall, Load Balancer)?
+            # 1. ¿El alvo es un Gateway de Seguridad (WAF, API Gateway, Ingress, Firewall, Load Balancer)?
             if [[ "${{ steps.consolidated_data.outputs.gateway_detected }}" == "true" ]]; then
-              printf "%s %s\n" "✅" "El objetivo es un Gateway de Seguridad (WAF, Ingress, CDN, etc.)"
+              printf "%s %s\n" "✅" "El alvo es un Gateway de Seguridad (WAF, Ingress, CDN, etc.)"
             else
-              printf "%s %s\n" "❌" "El objetivo NO es un Gateway de Seguridad aparente"
+              printf "%s %s\n" "❌" "El alvo NO es un Gateway de Seguridad aparente"
             fi
 
             # 2. ¿El tráfico pasa por un Gateway (X-Forwarded-For, Via, etc.)?
