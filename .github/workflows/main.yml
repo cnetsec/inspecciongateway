@@ -19,8 +19,9 @@ jobs:
       - name: ⚙️ Instalar dependencias necesarias
         run: |
           echo "🔄 Actualizando e instalando dependencias del sistema..."
+          # Removido 'openssl-server' - 'openssl' já é geralmente incluído ou não é necessário um pacote extra
           sudo apt-get update -y
-          sudo apt-get install -y jq unzip curl whatweb openssl-server # openssl-server para garantir compatibilidade com s_client
+          sudo apt-get install -y jq unzip curl whatweb 
 
           # Instalação robusta do httpx
           echo "📥 Descargando e instalando httpx..."
@@ -70,8 +71,7 @@ jobs:
           echo "---"
 
       - name: 📝 Resumen detallado del Certificado SSL
-        # CORREÇÃO AQUI: Usando hashFiles() para verificar a existência do arquivo 'cert_output.txt'
-        # A função hashFiles() retorna uma string vazia se o arquivo não existe ou está vazio.
+        # Usando hashFiles() para verificar a existência do arquivo 'cert_output.txt'
         if: success() && steps.analyze_certs.outcome == 'success' && hashFiles('cert_output.txt') != ''
         run: |
           echo "📋 Resumen del Certificado SSL:"
@@ -137,14 +137,14 @@ jobs:
           echo "Dominio: **${{ inputs.dominio }}**"
           echo "---"
           
-          # 1. Verificación de Tecnología Detectada
+          # 1. Verificação de Tecnologia Detectada
           if [[ "${{ steps.tecnologias.outputs.tecnologias }}" == "No se detectaron tecnologías específicas con WhatWeb." ]]; then
             echo "1. ¿Tecnología detectada? ❌ (WhatWeb es limitado. Puede requerir análisis manual.)"
           else
             echo "1. ¿Tecnología detectada? ✅ (Basado en WhatWeb)"
           fi
           
-          # 2. Verificación de Gateway de Seguridad
+          # 2. Verificação de Gateway de Segurança
           echo "2. ¿Es un Gateway de seguridad (WAF, API Gateway, Ingress, Firewall, Balanceador de Carga)?"
           WHATWEB_MATCHES=$(grep -i -E 'cloudflare|akamai|imperva|fastly|aws|api gateway|nginx ingress|waf|f5|palo alto|checkpoint|fortigate|barracuda|citrix|netscaler|azure application gateway|google cloud armor|cloudfront|incapsula|sucuri|mod_security|nginx/waf' whatweb_output.txt)
           HEADERS_MATCHES=$(grep -i -E 'x-forwarded|via|cf-ray|akamai|x-amz|x-cdn|x-gw|x-proxy|server:.*(waf|proxy|gateway|nginx|cloudflare|f5|akamai)|pragma: no-cache|cache-control: no-cache|x-xss-protection|strict-transport-security|content-security-policy|x-frame-options' headers_output.txt)
@@ -157,7 +157,7 @@ jobs:
             echo "❌ No se detectó Gateway de seguridad aparente."
           fi
 
-          # 3. Verificación de Paso por Gateway
+          # 3. Verificação de Paso por Gateway
           echo "3. ¿Pasa por Gateway (x-forwarded, headers específicos de proxy/CDN)?"
           if grep -i -E 'x-forwarded|via|x-amz|x-cdn|x-gw|x-proxy' headers_output.txt; then
             echo "✅ Evidencia de paso por Gateway."
@@ -165,20 +165,17 @@ jobs:
             echo "❌ No hay evidencia clara de paso por Gateway."
           fi
 
-          # 4. Verificación de Certificado Válido y Vigente
+          # 4. Verificação de Certificado Válido y Vigente
           echo "4. ¿Certificado válido y vigente?"
           if grep -q "Not After" cert_output.txt; then
             echo "✅ Certificado analizado."
-            # Exemplo: Verificar validade (simplificado, apenas para demonstração)
-            # Para uma verificação robusta de expiração, seria necessário parsear a data.
-            # if echo "$NOT_AFTER" | grep -q "$(date -d '+30 days' '+%b %d %H:%M:%S %Y %Z')"; then
-            #   echo "   ⚠️ El certificado podría expirar pronto (en menos de 30 días)."
-            # fi
+            # A verificação de expiração pode ser mais complexa e exigir ferramentas de parse de data
+            # ou lógica mais aprofundada se precisar de precisão em dias.
           else
             echo "⚠️ No se obtuvo certificado SSL o hubo un error al analizarlo."
           fi
 
-          # 5. Verificación de CVEs Encontrados
+          # 5. Verificação de CVEs Encontrados
           echo "5. ¿CVEs encontrados?"
           if grep -q "CVE-" cve_resultados.txt && [[ "${{ steps.tecnologias.outputs.tecnologias }}" != "No se detectaron tecnologías específicas con WhatWeb." ]]; then
             echo "⚠️ **¡Hay CVEs asociados a las tecnologías detectadas!** Se recomienda revisión."
