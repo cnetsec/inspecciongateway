@@ -70,34 +70,33 @@ jobs:
           echo "---"
 
       - name: 📝 Resumen detallado del Certificado SSL
-        # Roda apenas se o passo anterior de análise de certificado foi bem-sucedido e gerou o arquivo
-        if: success() && steps.analyze_certs.outcome == 'success' && -s 'cert_output.txt'
+        # CORREÇÃO AQUI: Usando hashFiles() para verificar a existência do arquivo 'cert_output.txt'
+        # A função hashFiles() retorna uma string vazia se o arquivo não existe ou está vazio.
+        if: success() && steps.analyze_certs.outcome == 'success' && hashFiles('cert_output.txt') != ''
         run: |
           echo "📋 Resumen del Certificado SSL:"
           CERT_FILE="cert_output.txt"
 
-          if [ -s "$CERT_FILE" ]; then # Verifica se o arquivo tem conteúdo
-            # Extrai informações usando grep e sed para formatação limpa
+          # Uma verificação extra dentro do script para garantir
+          if [ -s "$CERT_FILE" ]; then 
             ISSUER=$(grep -A 1 "Issuer:" "$CERT_FILE" | tail -n 1 | sed 's/^[[:space:]]*//')
             SUBJECT=$(grep -A 1 "Subject:" "$CERT_FILE" | tail -n 1 | sed 's/^[[:space:]]*//')
             NOT_BEFORE=$(grep "Not Before" "$CERT_FILE" | sed 's/^[[:space:]]*Not Before: //')
             NOT_AFTER=$(grep "Not After" "$CERT_FILE" | sed 's/^[[:space:]]*Not After : //')
             
-            # Extrai Subject Alternative Names (SANs) - pode haver múltiplas entradas DNS
-            # Garante que pega todas as linhas de DNS e as une com vírgula e espaço
             SANS=$(grep -A 10 "X509v3 Subject Alternative Name:" "$CERT_FILE" | grep "DNS:" | sed 's/^[[:space:]]*DNS://g' | paste -sd ", " -)
             
             echo "  ➡️ Emisor: **$ISSUER**"
             echo "  ➡️ Sujeto: **$SUBJECT**"
             echo "  ➡️ Válido desde: **$NOT_BEFORE**"
             echo "  ➡️ Válido hasta: **$NOT_AFTER**"
-            if [ -n "$SANS" ]; then # Verifica se SANs não está vazio
+            if [ -n "$SANS" ]; then
               echo "  ➡️ Nombres Alternativos del Sujeto (SANs): **$SANS**"
             else
               echo "  ➡️ Nombres Alternativos del Sujeto (SANs): *No encontrados o no aplicables*"
             fi
           else
-            echo "  ⚠️ No se pudo obtener o analizar el certificado en detalle."
+            echo "  ⚠️ No se pudo obtener ou analizar el certificado en detalle."
           fi
           echo "---"
 
@@ -105,7 +104,6 @@ jobs:
         id: tecnologias
         run: |
           echo "🧩 Consolidando tecnologías detectadas por WhatWeb..."
-          # Extrai tecnologias (entre colchetes) do output do WhatWeb, remove duplicatas e formata em CSV
           TECNOLOGIAS=$(cat whatweb_output.txt | grep -oP '\[[^\]]+\]' | sed 's/[\[\]]//g' | sort -u | paste -sd "," -)
           if [ -z "$TECNOLOGIAS" ]; then
             TECNOLOGIAS="No se detectaron tecnologías específicas con WhatWeb."
@@ -119,21 +117,18 @@ jobs:
           echo "🔍 Buscando CVEs relacionados en la base de datos CIRCL..."
           > cve_resultados.txt # Limpa o arquivo de resultados CVE antes de começar
 
-          # Verifica se há tecnologias para pesquisar CVEs
           if [[ "${{ steps.tecnologias.outputs.tecnologias }}" == "No se detectaron tecnologías específicas con WhatWeb." ]]; then
             echo "No se encontraron tecnologías específicas para buscar CVEs." >> cve_resultados.txt
           else
             IFS=',' read -ra TECNOS <<< "${{ steps.tecnologias.outputs.tecnologias }}"
             for TEC in "${TECNOS[@]}"; do
               echo "🔎 Buscando CVEs para: **$TEC**" >> cve_resultados.txt
-              # Consulta a API do CIRCL para cada tecnologia
-              # -L para seguir redirecionamentos, -f para falhar silenciosamente em erros HTTP
               curl -s -L -f "https://cve.circl.lu/api/search/$TEC" | \
                 jq -r '.[] | select(.id != null) | "**\(.id)**: \(.summary)"' >> cve_resultados.txt
-              echo "---" >> cve_resultados.txt # Separador para facilitar a leitura
+              echo "---" >> cve_resultados.txt
             done
           fi
-          cat cve_resultados.txt # Exibe os resultados dos CVEs no log
+          cat cve_resultados.txt
           echo "---"
 
       - name: ✅ Checklist Final de Inspección
@@ -151,9 +146,7 @@ jobs:
           
           # 2. Verificación de Gateway de Seguridad
           echo "2. ¿Es un Gateway de seguridad (WAF, API Gateway, Ingress, Firewall, Balanceador de Carga)?"
-          # Termos de whatweb_output.txt
           WHATWEB_MATCHES=$(grep -i -E 'cloudflare|akamai|imperva|fastly|aws|api gateway|nginx ingress|waf|f5|palo alto|checkpoint|fortigate|barracuda|citrix|netscaler|azure application gateway|google cloud armor|cloudfront|incapsula|sucuri|mod_security|nginx/waf' whatweb_output.txt)
-          # Termos de headers_output.txt
           HEADERS_MATCHES=$(grep -i -E 'x-forwarded|via|cf-ray|akamai|x-amz|x-cdn|x-gw|x-proxy|server:.*(waf|proxy|gateway|nginx|cloudflare|f5|akamai)|pragma: no-cache|cache-control: no-cache|x-xss-protection|strict-transport-security|content-security-policy|x-frame-options' headers_output.txt)
 
           if [ -n "$WHATWEB_MATCHES" ] || [ -n "$HEADERS_MATCHES" ]; then
@@ -176,10 +169,11 @@ jobs:
           echo "4. ¿Certificado válido y vigente?"
           if grep -q "Not After" cert_output.txt; then
             echo "✅ Certificado analizado."
-            # Adicional: Verificar validade (simplificado)
-            if echo "$NOT_AFTER" | grep -q "$(date -d '+30 days' '+%b %d %H:%M:%S %Y %Z')"; then # Exemplo: Verifica se expira em 30 dias
-               echo "   ⚠️ El certificado podría expirar pronto (en menos de 30 días)."
-            fi
+            # Exemplo: Verificar validade (simplificado, apenas para demonstração)
+            # Para uma verificação robusta de expiração, seria necessário parsear a data.
+            # if echo "$NOT_AFTER" | grep -q "$(date -d '+30 days' '+%b %d %H:%M:%S %Y %Z')"; then
+            #   echo "   ⚠️ El certificado podría expirar pronto (en menos de 30 días)."
+            # fi
           else
             echo "⚠️ No se obtuvo certificado SSL o hubo un error al analizarlo."
           fi
