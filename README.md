@@ -10,7 +10,7 @@ Este workflow executa uma **análise passiva de segurança** sobre um domínio o
 2. Selecione o workflow **Inspeccion Gateway**.
 3. Clique em **Run workflow** e preencha os campos:
 
-- `dominio`: domínio ou IP (ex: `juice-shop.herokuapp.com`)
+- `dominio`: domínio ou IP (ex: `[dominio].com`)
 - `gemini`: `true` para ativar relatório com IA Gemini, `false` para análise padrão.
 
 ---
