@@ -33,7 +33,7 @@ jobs:
       - name: 🧠 Extraer tecnología y versión
         id: extraer
         run: |
-          servidor=$(jq -r '.[0].server' salida_httpx.json)
+          servidor=$(jq -r '.server' salida_httpx.json | head -n 1)
           version_limpia=$(echo "$servidor" | grep -oP '[A-Za-z0-9\.-]+')
           echo "💡 Tecnología detectada: $servidor"
           echo "version=$version_limpia" >> $GITHUB_OUTPUT
