@@ -3,94 +3,113 @@ name: 🔍 Inspección Pasiva de Gateway
 on:
   workflow_dispatch:
     inputs:
-      objetivo:
-        description: '🔗 URL o dominio a inspeccionar (ej: https://example.com)'
+      dominio:
+        description: '🌐 Dominio a inspeccionar (ej: ejemplo.com)'
         required: true
-        type: string
-      gemini:
-        description: '🤖 ¿Activar análisis con Gemini?'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'true'
-          - 'false'
 
 jobs:
   inspeccion-pasiva:
     runs-on: ubuntu-latest
-    name: inspeccion-pasiva
-
+    name: 🌐 Inspección Pasiva
     steps:
-      - name: 📥 Clonar Repositorio
+
+      - name: ⬇️ Checkout del repositorio
         uses: actions/checkout@v4
 
       - name: ⚙️ Instalar dependencias necesarias
         run: |
           sudo apt update
           sudo apt install -y jq unzip curl whatweb
+          
+          # Instalação robusta do httpx
           curl -s https://api.github.com/repos/projectdiscovery/httpx/releases/latest \
-            | jq -r '.assets[] | select(.name | test("linux_amd64")) | .browser_download_url' \
-            | xargs curl -L -o httpx.tar.gz
-          tar -xzf httpx.tar.gz
+            | jq -r '.assets[] | select(.name | test("httpx_.*_linux_amd64.zip")) | .browser_download_url' \
+            | xargs curl -L -o httpx.zip
+          unzip httpx.zip
+          chmod +x httpx
           sudo mv httpx /usr/local/bin/httpx
+          
+          # Instalação do Wappalyzer CLI
+          curl -L https://github.com/projectdiscovery/wappalyzergo/releases/latest/download/wappalyzer_linux_amd64.zip -o wappalyzer.zip
+          unzip wappalyzer.zip
+          chmod +x wappalyzer
+          sudo mv wappalyzer /usr/local/bin/wappalyzer
 
-      - name: 🧾 Preparar objetivo
-        run: echo "${{ inputs.objetivo }}" > objetivos.txt
-
-      - name: 🌐 Ejecutar httpx con salida JSON
+      - name: 🌐 Executar ferramentas passivas
         run: |
-          httpx -l objetivos.txt -title -tech-detect -tls-grab -json -no-color -silent > salida_httpx.json || echo "[]" > salida_httpx.json
+          echo "🔎 Dominio: ${{ inputs.dominio }}"
+          
+          echo "🧪 HTTPX:"
+          httpx -silent -title -tls-probe -status-code -tech-detect -ip -location -web-server -cdn -json -u ${{ inputs.dominio }} > httpx_output.json
+          cat httpx_output.json
 
-      - name: 🧠 Análisis WhatWeb
+          echo "🧪 WhatWeb:"
+          whatweb ${{ inputs.dominio }} > whatweb_output.txt
+          cat whatweb_output.txt
+
+          echo "🧪 Wappalyzer CLI:"
+          wappalyzer -urls ${{ inputs.dominio }} > wappalyzer_output.json
+          cat wappalyzer_output.json
+
+      - name: 📄 Analizar headers y certificado SSL
         run: |
-          whatweb -a 3 -v "${{ inputs.objetivo }}" > salida_whatweb.txt || echo "" > salida_whatweb.txt
+          echo "🔐 Headers y Certificados:"
+          curl -s -D - https://${{ inputs.dominio }} -o /dev/null > headers_output.txt
+          cat headers_output.txt
+          
+          echo | openssl s_client -servername ${{ inputs.dominio }} -connect ${{ inputs.dominio }}:443 2>/dev/null | openssl x509 -noout -text > cert_output.txt
+          cat cert_output.txt
 
-      - name: 🧠 Análisis por encabezados y certificado TLS
+      - name: 🧠 Consolidar tecnologías detectadas
+        id: tecnologias
         run: |
-          tecnologia=$(jq -r '.[0].tech' salida_httpx.json | tr -d '[]"' | tr ',' '\n' | head -n 1)
-          version=$(jq -r '.[0].webserver' salida_httpx.json)
-          subject_cn=$(jq -r '.[0].tls.subject_cn' salida_httpx.json)
-          issuer_cn=$(jq -r '.[0].tls.issuer_cn' salida_httpx.json)
-          headers=$(jq -r '.[0].response_headers | to_entries[] | "\(.key): \(.value)"' salida_httpx.json)
+          TECNOLOGIAS=$(cat wappalyzer_output.json | jq -r '.[].technologies[].name' | sort -u | paste -sd "," -)
+          echo "🧩 Tecnologías encontradas: $TECNOLOGIAS"
+          echo "tecnologias=$TECNOLOGIAS" >> $GITHUB_OUTPUT
 
-          echo "💡 Tecnología principal detectada: ${tecnologia}" | tee logs_gatewayinspector.txt
-          echo "🔖 Versión del servidor web: ${version}" | tee -a logs_gatewayinspector.txt
-          echo "🔐 Certificado TLS CN: ${subject_cn}" | tee -a logs_gatewayinspector.txt
-          echo "🛡️ Emitido por: ${issuer_cn}" | tee -a logs_gatewayinspector.txt
-          echo "📋 Encabezados HTTP:" | tee -a logs_gatewayinspector.txt
-          echo "${headers}" | tee -a logs_gatewayinspector.txt
-
-          echo "${tecnologia}" > tecnologia_detectada.txt
-          echo "${version}" > version_detectada.txt
-
-      - name: 🔍 Consultar CVEs usando CIRCL
+      - name: 🐞 Buscar CVEs en CIRCL para tecnologías detectadas
         run: |
-          tecnologia=$(cat tecnologia_detectada.txt)
-          version=$(cat version_detectada.txt)
+          echo "🔍 Buscando CVEs relacionados..."
+          IFS=',' read -ra TECNOS <<< "${{ steps.tecnologias.outputs.tecnologias }}"
+          > cve_resultados.txt
+          for TEC in "${TECNOS[@]}"; do
+            echo "🔎 $TEC" >> cve_resultados.txt
+            curl -s "https://cve.circl.lu/api/search/$TEC" | jq '.[] | select(.id != null) | "\(.id): \(.summary)"' >> cve_resultados.txt
+            echo "---" >> cve_resultados.txt
+          done
+          cat cve_resultados.txt
 
-          if [ "$tecnologia" != "null" ] && [ "$tecnologia" != "" ]; then
-            echo "🔍 Consultando CVEs en: https://cve.circl.lu/api/search/${tecnologia}/${version}" | tee -a logs_gatewayinspector.txt
-            curl -s "https://cve.circl.lu/api/search/${tecnologia}/${version}" | jq '.' > cves.json || echo "{}" > cves.json
+      - name: ✅ Checklist Final (Español)
+        run: |
+          echo "📋 Checklist Final:"
+          echo "Dominio: ${{ inputs.dominio }}"
+          echo "---"
+          echo "1. ¿Tecnología detectada? ✅"
+          echo "2. ¿Es un Gateway de seguridad (WAF, API Gateway, Ingress)?"
+          
+          if grep -i -E 'cloudflare|akamai|imperva|fastly|aws|api gateway|nginx ingress' whatweb_output.txt || grep -i -E 'x-forwarded|via|cf-ray|akamai|x-amz' headers_output.txt; then
+            echo "➡️  Posible Gateway de seguridad detectado ✅"
           else
-            echo "❌ Tecnología no identificada. No se consultarán CVEs." | tee -a logs_gatewayinspector.txt
-            echo "{}" > cves.json
+            echo "❌ No se detectó Gateway de seguridad"
           fi
 
-      - name: ✅ Checklist final
-        run: |
-          echo "### Checklist de Tecnologías Detectadas" | tee -a logs_gatewayinspector.txt
+          echo "3. ¿Pasa por Gateway (x-forwarded, headers específicos)?"
+          if grep -i -E 'x-forwarded|via|x-amz' headers_output.txt; then
+            echo "✅ Evidencia de paso por Gateway"
+          else
+            echo "❌ No hay evidencia clara de paso por Gateway"
+          fi
 
-          declare -a checks=("waf" "ingress" "gateway" "tls" "nginx" "kubernetes" "apache" "modsecurity" "cloudflare" "haproxy" "envoy" "fortinet" "checkpoint" "aws" "f5" "paloalto")
-          for tech in "${checks[@]}"; do
-            if grep -iq "$tech" logs_gatewayinspector.txt || grep -iq "$tech" salida_whatweb.txt; then
-              echo "- $tech: ✅" | tee -a logs_gatewayinspector.txt
-            else
-              echo "- $tech: ❌" | tee -a logs_gatewayinspector.txt
-            fi
-          done
+          echo "4. ¿Certificado válido y vigente?"
+          if grep -q "Not After" cert_output.txt; then
+            echo "✅ Certificado analizado"
+          else
+            echo "⚠️ No se obtuvo certificado"
+          fi
 
-      - name: 📝 Mostrar resultados finales
-        run: |
-          echo "📝 Resultado del Análisis:"
-          cat logs_gatewayinspector.txt
+          echo "5. ¿CVEs encontrados?"
+          if grep -q "CVE-" cve_resultados.txt; then
+            echo "⚠️ Hay CVEs asociados a las tecnologías detectadas"
+          else
+            echo "✅ No se encontraron CVEs relevantes"
+          fi
