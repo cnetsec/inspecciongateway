@@ -39,7 +39,7 @@ Você verá um **checklist de segurança** com:
 ### 🔸 Modo com Gemini (`gemini: true`)
 Gera um **relatório técnico completo** em Markdown com:
 
-- Checklist automatizado com emojis
+- Checklist automatizado 
 - Resumo executivo
 - Detecção tecnológica
 - Análise de SSL, headers e CVEs
@@ -92,4 +92,4 @@ Settings → Secrets → New repository secret
 
 ---
 
-Made with ❤️ by CNetSec · Powered by Gemini AI
+Made with by CNetSec · Powered by Gemini AI
