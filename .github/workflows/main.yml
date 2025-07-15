@@ -1,63 +1,69 @@
-name: InspeccionGateway
+name: 🔍 Inspección Pasiva de Gateway
 
 on:
   workflow_dispatch:
-    inputs:
-      objetivo:
-        description: 'Dominio o IP a analizar (ej: juice-shop.herokuapp.com)'
-        required: true
-        type: string
 
 jobs:
-  escaneo:
+  analisis-superficie:
     name: Análisis Pasivo de Superficie de Borde
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🔄 Checkout del repositorio
+      - name: 📥 Clonar repositorio
         uses: actions/checkout@v4
 
-      - name: 🛠️ Instalar herramientas necesarias
+      - name: 📦 Instalar herramientas necesarias
         run: |
-          sudo apt-get update
-          sudo apt-get install -y curl wget jq golang
+          sudo apt update
+          sudo apt install -y jq curl unzip
           go install github.com/projectdiscovery/httpx/cmd/httpx@latest
           echo "$HOME/go/bin" >> $GITHUB_PATH
 
-      - name: 🌐 Fingerprint con httpx
+      - name: 📄 Crear archivo de objetivos
+        run: echo "juice-shop.herokuapp.com" > objetivos.txt
+
+      - name: 🌐 Ejecutar httpx (detección pasiva)
         run: |
-          echo "${{ inputs.objetivo }}" > objetivos.txt
           httpx -l objetivos.txt -title -tech-detect -tls-grab -json -no-color -silent > salida_httpx.json
           cat salida_httpx.json > logs_gatewayinspector.txt
 
       - name: 🧠 Extraer tecnología y versión
         id: extraer
         run: |
-          servidor=$(jq -r '.server' salida_httpx.json | head -n 1)
-          version_limpia=$(echo "$servidor" | grep -oP '[A-Za-z0-9\.-]+')
-          echo "💡 Tecnología detectada: $servidor"
+          tecnologia=$(jq -r '.webserver // .cdn_name // .tls.issuer_cn // .tls.subject_cn // empty' salida_httpx.json | head -n 1)
+          if [[ -z "$tecnologia" || "$tecnologia" == "null" ]]; then
+            echo "❌ No se pudo detectar ninguna tecnología."
+            tecnologia="Desconocida"
+          fi
+          version_limpia=$(echo "$tecnologia" | grep -oP '[A-Za-z0-9\.\-]+' | head -n 1)
+          echo "💡 Tecnología detectada: $tecnologia"
           echo "version=$version_limpia" >> $GITHUB_OUTPUT
-          echo "$servidor" >> logs_gatewayinspector.txt
+          echo "Tecnología usada para búsqueda de CVE: $tecnologia" >> logs_gatewayinspector.txt
 
-      - name: 🛡️ Consultar posibles CVEs en CIRCL
+      - name: 🛡️ Consultar CVEs en CIRCL
         run: |
           version="${{ steps.extraer.outputs.version }}"
-          cve_url="https://cve.circl.lu/api/search/$version"
-          echo "🔍 Consultando CVEs en: $cve_url"
-          curl -s "$cve_url" | jq '.data[] | {id, summary}' >> logs_gatewayinspector.txt || echo "Sin CVEs encontrados." >> logs_gatewayinspector.txt
+          echo "🔍 Consultando CVEs en: https://cve.circl.lu/api/search/$version"
+          curl -s "https://cve.circl.lu/api/search/$version" > cves.json || echo "[]"
+          if jq -e '.[]' cves.json > /dev/null 2>&1; then
+            echo "✅ CVEs encontrados para $version:"
+            jq '.[] | {id, summary}' cves.json | tee -a logs_gatewayinspector.txt
+          else
+            echo "Sin CVEs encontrados." | tee -a logs_gatewayinspector.txt
+          fi
 
-      - name: ✅ Checklist de tecnologías detectadas
+      - name: 📋 Checklist Final de Tecnologías Detectadas
         run: |
           echo "### Checklist de Tecnologías Detectadas" >> logs_gatewayinspector.txt
-          for item in waf ingress gateway tls nginx kubernetes apache modsecurity cloudflare haproxy envoy; do
-            if grep -i "$item" salida_httpx.json; then
-              echo "- $item: ✅" >> logs_gatewayinspector.txt
+          for tech in waf ingress gateway tls nginx kubernetes apache modsecurity cloudflare haproxy envoy; do
+            if grep -i "$tech" salida_httpx.json; then
+              echo "- $tech: ✅" | tee -a logs_gatewayinspector.txt
             else
-              echo "- $item: ❌" >> logs_gatewayinspector.txt
+              echo "- $tech: ❌" | tee -a logs_gatewayinspector.txt
             fi
           done
 
-      - name: 📦 Mostrar resultado final
+      - name: 📝 Resultado del Análisis
         run: |
           echo "📝 Resultado del Análisis:"
           cat logs_gatewayinspector.txt
