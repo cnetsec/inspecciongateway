@@ -1,76 +1,109 @@
-🔍 Inspección Gateway
-Inspeccion Gateway es un workflow de GitHub Actions diseñado para realizar una inspección pasiva de la superficie de exposición de un dominio o IP, con un enfoque particular en la detección de Gateways de Seguridad, WAFs, CDNs e Ingresses. Opcionalmente, puede generar un informe detallado y contextualizado utilizando la inteligencia artificial de Google Gemini.
+# 🔍 Inspección Gateway
 
-🚀 Uso
-Para ejecutar este workflow, navega a la pestaña "Actions" en tu repositorio de GitHub, selecciona "Inspeccion Gateway" en la barra lateral izquierda y haz clic en "Run workflow".
+**`Inspeccion Gateway`** es un workflow de GitHub Actions diseñado para realizar una **inspección pasiva de la superficie de exposición** de un dominio o IP, con foco especial en la detección de:
 
-Deberás proporcionar los siguientes inputs:
+🛡️ **WAFs**, 🌐 **Gateways de Seguridad**, 📦 **CDNs**, y 🛣️ **Ingress Controllers**.
 
-dominio: El dominio o dirección IP del objetivo a analizar (ej: juice-shop.herokuapp.com).
+Además, ofrece la opción de generar un informe técnico y ejecutivo **potenciado por IA con Google Gemini**.
 
-gemini: Selecciona true si deseas generar un informe avanzado con la IA de Gemini, o false para obtener solo el resumen estándar.
+---
 
-📊 Resultados del Análisis
-El workflow siempre realizará una serie de análisis pasivos utilizando herramientas como HTTPX, WhatWeb, Wafw00f y Nmap, y analizará los encabezados HTTP/S y el certificado SSL/TLS. Los resultados se presentarán de dos maneras, dependiendo de tu elección para Gemini:
+## 🚀 Cómo usar
 
-📋 1. Modo Estándar (Sin Gemini o si Gemini falla)
-Si seleccionas gemini: 'false' o si la generación del informe con Gemini encuentra algún problema, el workflow proporcionará un "Resumen de Hallazgos (Checklist Estándar)" directamente en el log de la ejecución de GitHub Actions.
+1. Accede a la pestaña **"Actions"** de tu repositorio.
+2. Selecciona **"Inspeccion Gateway"** en el menú lateral.
+3. Haz clic en **"Run workflow"**.
+4. Completa los siguientes inputs:
 
-Este checklist está diseñado para darte una visión rápida y concisa de los puntos clave, con un énfasis claro en la seguridad perimetral:
+- 🔹 **`dominio`**: El dominio o IP objetivo (ej: `juice-shop.herokuapp.com`)
+- 🔹 **`gemini`**: Selecciona `true` para generar un informe avanzado con Gemini AI, o `false` para un análisis estándar.
 
-¿Es un Gateway de seguridad (WAF, API Gateway, Ingress, Firewall, Balanceador de Carga)? ✅ / ❌
+---
 
-¿Pasa por Gateway (x-forwarded, headers específicos de proxy/CDN)? ✅ / ❌
+## 📊 Resultados del Análisis
 
-¿Tecnología detectada? ✅ / ❌
+El análisis incluye:
 
-¿Certificado válido y vigente? ✅ / ⚠️ (Próximo a expirar) / ❌ (Expirado)
+- Detección de tecnologías expuestas
+- Verificación de encabezados HTTP/S
+- Análisis de certificado SSL/TLS
+- Escaneo de puertos básicos
+- Detección de gateways de seguridad
+- Consulta de CVEs en CIRCL
 
-¿CVEs encontrados? ✅ / ⚠️
+Los resultados se presentan según la opción de Gemini:
 
-Este formato te permite identificar rápidamente la presencia de componentes de seguridad y el estado general del objetivo.
+---
 
-✨ 2. Modo Potenciado por Gemini AI (Si gemini: 'true' y exitoso)
-Cuando activas la opción gemini: 'true' y la integración con la IA de Google Gemini se completa con éxito, el workflow generará un "Análisis Completo y Empoderado por Gemini AI".
+### 📋 Modo Estándar (`gemini: false` o en caso de error)
 
-Este informe es una versión ampliada y contextualizada del análisis estándar. Gemini actúa como un experto en ciberseguridad, analizando los logs brutos de todas las herramientas para:
+Se genera un **Checklist Estándar** con los siguientes puntos clave:
 
-Proporcionar un Resumen Ejecutivo conciso.
+- ✅ **¿Gateway de Seguridad detectado?**  
+- ✅ **¿Headers de proxy/CDN presentes?**  
+- ✅ **¿Tecnología identificada (HTTPX / WhatWeb)?**  
+- ✅ / ⚠️ / ❌ **¿Certificado SSL válido y vigente?**  
+- ✅ / ❌ **¿CVEs asociados a tecnologías detectadas?**
 
-Detallar la Información General del Objetivo, incluyendo tecnologías, servidor web, CDN/WAF detectado y puertos abiertos.
+Este resumen es útil para auditorías rápidas o escaneos iniciales de exposición.
 
-Ofrecer un Análisis de Certificado SSL/TLS con estado de expiración.
+---
 
-Desglosar el Análisis de Encabezados HTTP/S, destacando headers de seguridad y de proxy/CDN.
+### ✨ Modo con Gemini AI (`gemini: true` y éxito)
 
-Identificar Vulnerabilidades Potenciales y Riesgos basados en las tecnologías y la configuración de seguridad (o su ausencia).
+Se genera un **informe profesional** en Markdown, con análisis contextual hecho por IA, incluyendo:
 
-Sugerir Recomendaciones y Próximos Pasos para mejorar la postura de seguridad.
+1. 📌 **Resumen Ejecutivo**  
+2. 🌐 **Información General del Objetivo**  
+3. 🔐 **Análisis de Certificado SSL/TLS**  
+4. 🧩 **Encabezados HTTP/S: Seguridad y Proxy/CDN**  
+5. ⚠️ **Vulnerabilidades y Riesgos Detectados**  
+6. 🛠️ **Recomendaciones y Próximos Pasos**
 
-Este informe es ideal para una comprensión más profunda y para la toma de decisiones estratégicas en seguridad.
+Ideal para presentaciones técnicas, toma de decisiones y reportes a stakeholders.
 
-📦 Artefactos Generados
-Al finalizar cada ejecución, el workflow subirá un artefacto llamado inspeccion-gateway-results-{run_id}. Este artefacto contendrá todos los archivos de salida generados por las herramientas, incluyendo:
+---
 
-httpx_output.json
+## 📦 Artefactos Generados
 
-whatweb_output.txt
+Al final de cada ejecución, se sube un archivo ZIP con todos los outputs relevantes:
 
-wafw00f_output.txt
+| Archivo                         | Descripción                                         |
+|----------------------------------|-----------------------------------------------------|
+| `httpx_output.json`              | Resultado del escaneo HTTPX                        |
+| `whatweb_output.txt`            | Tecnologías detectadas por WhatWeb                 |
+| `wafw00f_output.txt`            | Presencia de WAFs                                  |
+| `nmap_output.txt`               | Estado de puertos 80 y 443                         |
+| `headers_output.txt`            | Headers HTTP/S del objetivo                        |
+| `cert_output.txt`               | Certificado SSL completo                           |
+| `cve_resultados.txt`            | CVEs asociados a tecnologías detectadas            |
+| `gateinspector_raw_logs.txt`    | Consolidado de logs de todas las herramientas      |
+| `gemini_report.md` *(opcional)* | Informe detallado generado por Gemini AI           |
 
-nmap_output.txt
+> 📥 Puedes descargar estos artefactos desde la página del workflow, para análisis offline o reportes.
 
-headers_output.txt
+---
 
-cert_output.txt
+## 🔑 Requisitos para usar Gemini AI
 
-cve_resultados.txt
+Si deseas habilitar el modo Gemini, asegúrate de:
 
-gateinspector_raw_logs.txt (el log consolidado de todas las herramientas)
+- Crear un secreto en GitHub llamado **`GEMINI_API_KEY`**
+- Obtener tu API Key desde **[Google AI Studio](https://makersuite.google.com/)**
 
-gemini_report.md (solo si se generó el informe de Gemini)
+---
 
-Puedes descargar este artefacto desde la página de resumen de la ejecución del workflow para un análisis offline.
+## 🎯 Casos de uso
 
-🔑 Requisitos
-Para utilizar la funcionalidad de Gemini, debes configurar una API Key de Google Gemini como un secreto de repositorio en GitHub. El secreto debe llamarse GEMINI_API_KEY.
+- 🔐 Auditoría pasiva de la seguridad perimetral
+- 🕵️‍♂️ Reconocimiento de tecnologías y vectores expuestos
+- 📈 Reportes profesionales para presentación de hallazgos
+- 🤖 Análisis contextual y recomendaciones impulsadas por IA
+
+---
+
+## 🤝 Créditos
+
+Este workflow fue diseñado con enfoque en análisis **pasivo**, seguro y automatizado para mejorar la visibilidad de borda en entornos productivos o de auditoría.
+
+---
