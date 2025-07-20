@@ -1,0 +1,50 @@
+name: 🔍 Inspección Simple de Headers y Certificado
+
+on:
+  workflow_dispatch:
+    inputs:
+      dominio:
+        description: '🌐 Dominio o IP a analizar (ej: juice-shop.herokuapp.com)'
+        required: true
+        type: string
+
+jobs:
+  inspeccion:
+    name: 🔎 Obtener headers y certificado
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🔄 Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Instalar herramientas necesarias
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y curl openssl
+
+      - name: 📁 Crear carpeta de resultados
+        run: mkdir -p salida
+
+      - name: 📡 Obtener headers HTTP
+        run: |
+          echo "👉 Headers de ${{ inputs.dominio }}" > salida/headers.txt
+          curl -s -D - -o /dev/null https://${{ inputs.dominio }} >> salida/headers.txt || echo "❌ Error al obtener headers" >> salida/headers.txt
+
+      - name: 🔐 Obtener certificado TLS
+        run: |
+          echo "👉 Certificado TLS de ${{ inputs.dominio }}" > salida/certificado.txt
+          echo | openssl s_client -connect ${{ inputs.dominio }}:443 -servername ${{ inputs.dominio }} 2>/dev/null | openssl x509 -noout -text >> salida/certificado.txt || echo "❌ Error al obtener certificado" >> salida/certificado.txt
+
+      - name: 📄 Mostrar resultados en pantalla
+        run: |
+          echo "📄 ==== HEADERS HTTP ===="
+          cat salida/headers.txt
+          echo ""
+          echo "📄 ==== CERTIFICADO TLS ===="
+          cat salida/certificado.txt
+
+      - name: 📤 Subir resultados
+        uses: actions/upload-artifact@v4
+        with:
+          name: headers-cert-${{ inputs.dominio }}
+          path: salida
