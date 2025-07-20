@@ -1,0 +1,328 @@
+{
+  "filtros": {
+    "cabeceras": {
+      "cloudflare": [
+        "cf-ray",
+        "server: cloudflare",
+        "cf-cache-status"
+      ],
+      "akamai": [
+        "server: AkamaiGHost",
+        "x-akamai-transformed"
+      ],
+      "imperva": [
+        "x-iinfo",
+        "x-cdn"
+      ],
+      "fastly": [
+        "x-fastly-request-id",
+        "via: 1.1 varnish"
+      ],
+      "aws_gateway": [
+        "x-amzn-requestid",
+        "x-amz-cf-id",
+        "x-api-gateway-id"
+      ],
+      "google_cloud_armor": [
+        "server: GFE",
+        "x-goog-meta",
+        "x-cloud-trace-context"
+      ],
+      "azure_application_gateway": [
+        "x-azure-ref",
+        "server: Microsoft-IIS"
+      ],
+      "bigip": [
+        "x-waf",
+        "server: BigIP",
+        "x-correlation-id"
+      ],
+      "checkpoint": [
+        "server: CheckPoint",
+        "x-cp-product"
+      ],
+      "fortigate": [
+        "set-cookie: APSCOOKIE",
+        "server: FortiWeb"
+      ],
+      "barracuda": [
+        "server: BarracudaHttpServer"
+      ],
+      "citrix": [
+        "server: NetScaler",
+        "x-citrix-netscaler"
+      ],
+      "f5_asm": [
+        "x-waf-event",
+        "x-asm-version",
+        "x-f5-bigip"
+      ],
+      "modsecurity": [
+        "server: Mod_Security",
+        "x-modsec"
+      ],
+      "sucuri": [
+        "x-sucuri-id",
+        "x-sucuri-cache",
+        "x-sucuri-block"
+      ],
+      "incapsula": [
+        "x-cdn: Incapsula",
+        "x-iinfo"
+      ],
+      "nginx_ingress": [
+        "x-nginx-proxy",
+        "server: nginx",
+        "x-ingress-controller"
+      ],
+      "traefik": [
+        "server: traefik",
+        "x-traefik-backend"
+      ],
+      "kong_gateway": [
+        "x-kong-response-latency",
+        "x-kong-proxy-latency",
+        "via: kong/"
+      ],
+      "ambassador": [
+        "server: envoy",
+        "x-envoy-upstream-service-time"
+      ],
+      "istio": [
+        "x-envoy-attempt-count",
+        "x-envoy-upstream-service-time"
+      ],
+      "nginx_plus": [
+        "x-nginx-plus-version",
+        "server: nginx-plus"
+      ],
+      "envoy": [
+        "server: envoy",
+        "x-envoy-"
+      ],
+      "haproxy": [
+        "via: haproxy",
+        "x-haproxy-proxyname"
+      ],
+      "apache_traffic_server": [
+        "server: ATS"
+      ],
+      "juniper_firewall": [
+        "server: Juniper",
+        "x-jweb-version"
+      ],
+      "sonicwall": [
+        "server: SonicWALL",
+        "set-cookie: SWSESSION"
+      ],
+      "watchguard": [
+        "server: WatchGuard",
+        "x-watchguard-firebox"
+      ],
+      "sophos": [
+        "server: Sophos",
+        "set-cookie: SECSESSID"
+      ],
+      "zscaler": [
+        "server: Zscaler",
+        "x-zscaler-request-id"
+      ],
+      "ibm_data_power": [
+        "server: WebSphere DataPower",
+        "x-dp-transcode-id"
+      ],
+      "squid_proxy": [
+        "via: squid",
+        "server: squid"
+      ],
+      "bluecoat_proxy": [
+        "server: BlueCoat",
+        "x-bluecoat-via"
+      ],
+      "nginx_proxy": [
+        "via: nginx",
+        "x-nginx-proxy"
+      ],
+      "cisco_asa": [
+        "server: CiscoASA",
+        "x-asa-fw"
+      ],
+      "palo_alto": [
+        "server: PaloAlto",
+        "x-pan-fw-version"
+      ],
+      "reverse_proxy_generic": [
+        "via:",
+        "x-forwarded-for",
+        "x-proxy-id",
+        "x-reverse-proxy"
+      ],
+      "openresty": [
+        "server: openresty",
+        "x-resty-id"
+      ],
+      "istio_ingress": [
+        "x-istio-attributes",
+        "x-envoy-decorator-operation"
+      ]
+    },
+    "rutas_comunes": {
+      "f5": [
+        "/tmui/login.jsp",
+        "/mgmt/shared/authn/login"
+      ],
+      "aws_gateway": [
+        "/restapis",
+        "/usageplans",
+        "/stages"
+      ],
+      "modsecurity": [
+        "/.htaccess",
+        "/cgi-bin",
+        "/modsec"
+      ],
+      "fortigate": [
+        "/remote/login",
+        "/forti",
+        "/admin",
+        "/logon"
+      ],
+      "checkpoint": [
+        "/secureplatform",
+        "/admin/show",
+        "/admin/login"
+      ],
+      "cloudflare": [
+        "/cdn-cgi/login",
+        "/cdn-cgi/challenge"
+      ],
+      "citrix": [
+        "/vpn/index.html",
+        "/cgi/login"
+      ],
+      "istio": [
+        "/istio",
+        "/metrics",
+        "/envoy-admin"
+      ],
+      "kong": [
+        "/kong",
+        "/status",
+        "/admin-api"
+      ],
+      "ambassador": [
+        "/ambassador/v0/check_ready",
+        "/ambassador/v0/routes"
+      ],
+      "nginx_ingress": [
+        "/nginx_status",
+        "/status",
+        "/ingress"
+      ],
+      "juniper": [
+        "/jweb/",
+        "/auth/login",
+        "/admin"
+      ],
+      "sonicwall": [
+        "/auth.cgi",
+        "/login.html",
+        "/cgi-bin/welcome"
+      ],
+      "watchguard": [
+        "/sslvpn_logon.shtml",
+        "/wglogin",
+        "/firebox/"
+      ],
+      "sophos": [
+        "/utm/",
+        "/login.plx",
+        "/userportal"
+      ],
+      "zscaler": [
+        "/zscaler",
+        "/auth",
+        "/vpn"
+      ],
+      "ibm_data_power": [
+        "/dp/login",
+        "/xmlmgmt",
+        "/dp/status"
+      ],
+      "bluecoat": [
+        "/bluecoat",
+        "/proxy/login",
+        "/auth"
+      ],
+      "squid": [
+        "/squid-internal-static/",
+        "/cache_object",
+        "/squid-status"
+      ],
+      "palo_alto": [
+        "/php/login.php",
+        "/esp/cms",
+        "/auth/login"
+      ],
+      "openresty": [
+        "/nginx_status",
+        "/resty-status"
+      ],
+      "reverse_proxy": [
+        "/proxy.pac",
+        "/status",
+        "/admin"
+      ]
+    },
+    "endpoints_tls": {
+      "fortinet": [
+        "*.fortinet.com",
+        "fortiguard.com"
+      ],
+      "akamai": [
+        "*.akamai.net",
+        "akamai.com"
+      ],
+      "cloudflare": [
+        "*.cloudflare.com",
+        "*.cf.cloudflare.com"
+      ],
+      "aws": [
+        "*.amazonaws.com",
+        "cloudfront.net"
+      ],
+      "google": [
+        "*.googleusercontent.com",
+        "*.gstatic.com"
+      ],
+      "azure": [
+        "*.azureedge.net",
+        "*.trafficmanager.net"
+      ],
+      "juniper": [
+        "*.juniper.net"
+      ],
+      "sonicwall": [
+        "*.sonicwall.com"
+      ],
+      "watchguard": [
+        "*.watchguard.com"
+      ],
+      "sophos": [
+        "*.sophos.com"
+      ],
+      "zscaler": [
+        "*.zscaler.com"
+      ],
+      "ibm": [
+        "*.datapower.ibm.com"
+      ],
+      "paloalto": [
+        "*.paloaltonetworks.com"
+      ],
+      "bluecoat": [
+        "*.bluecoat.com"
+      ]
+    }
+  }
+}
